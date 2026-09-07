@@ -3,4 +3,8 @@ uvicorn==0.34.0
 pydantic==2.10.4
 anthropic>=1.0.0
 pytest==8.3.4
+# fastapi.testclient.TestClient 는 httpx 를 쓴다
+httpx==0.28.1
+# anthropic SDK 는 httpx 가 아니라 httpx2 위에 있다 (anthropic 이 전이 의존성으로
+# 끌어오지만, 버전이 바뀌어도 깨지지 않게 명시해 둔다)
 httpx2
