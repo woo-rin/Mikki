@@ -122,6 +122,21 @@ def test_insufficient_cash_returns_400_with_a_code(client):
     assert response.json()["detail"]["message"]
 
 
+@pytest.mark.parametrize("qty", [0, -3])
+def test_non_positive_quantity_returns_the_documented_400(client, qty):
+    """수량 거부도 다른 거부와 같은 {code, message} 400 이어야 한다.
+
+    Pydantic 제약을 두면 라우트 본문 전에 422 로 잘려 계약이 한 입력에서만 달라진다.
+    """
+    sid = start(client)["session_id"]
+    response = client.post("/api/trade", json={
+        "session_id": sid, "symbol": "geno", "side": "buy", "qty": qty,
+    })
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "bad_quantity"
+    assert response.json()["detail"]["message"]
+
+
 def test_unknown_session_returns_404(client):
     response = client.get("/api/state?session_id=nope")
     assert response.status_code == 404
@@ -286,7 +301,7 @@ def test_ramp_remaining_is_measured_after_the_call_returns(client, monkeypatch):
 
     import app.main as main
 
-    body = start(client, ELAPSED)
+    body = start(client)
     sid = body["session_id"]
     sess = main.sessions[sid]
 

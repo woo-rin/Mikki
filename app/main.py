@@ -8,29 +8,49 @@ import os
 import random
 import time
 import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from app import analysis, config, engine, fallback, news, session as rules
 from app.models import NewsPlan
 from app.scenario import build_plans
 from app.session import GameSession, TradeError
 
-app = FastAPI(title="모의주식게임")
 
-sessions: dict[str, GameSession] = {}
-_locks: dict[str, asyncio.Lock] = {}
-
-
-def _client():
+def _build_client():
     """키가 없으면 None — 그 경우 어댑터가 폴백으로 떨어진다."""
     if not os.environ.get("ANTHROPIC_API_KEY"):
         return None
     import anthropic
 
     return anthropic.Anthropic()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 클라이언트는 프로세스 수명 동안 하나만 둔다. 호출마다 새로 만들면
+    # 연결 풀과 스레드가 서버 수명 내내 쌓인다.
+    app.state.claude = _build_client()
+    try:
+        yield
+    finally:
+        client = getattr(app.state, "claude", None)
+        if client is not None and hasattr(client, "close"):
+            client.close()
+
+
+app = FastAPI(title="모의주식게임", lifespan=lifespan)
+
+sessions: dict[str, GameSession] = {}
+_locks: dict[str, asyncio.Lock] = {}
+
+
+def _client():
+    # lifespan 이 돌지 않은 채 임포트만 된 경우에도 None 으로 안전하게 떨어진다.
+    return getattr(app.state, "claude", None)
 
 
 def _get(session_id: str) -> GameSession:
@@ -70,6 +90,7 @@ def _stock_rows(sess: GameSession) -> list[dict]:
             "name": stock.name,
             "sector": stock.sector,
             "price": price,
+            # 표시용 백분율이라 돈의 내림 규칙에서 면제된다. 어떤 판정에도 쓰이지 않는다.
             "change_pct": round((price / stock.base_price - 1) * 100, 2),
             "held": sess.holdings.get(symbol, 0),
         })
@@ -145,7 +166,11 @@ async def _refill(sess: GameSession, count: int) -> None:
     _refilling.add(sess.session_id)
     try:
         plans = _next_batch_plans(sess, count)
-        items = await asyncio.to_thread(news.fetch_news, plans, sess.rng, _client())
+        # rng 는 이벤트 루프 스레드의 engine.advance 가 동시에 쓴다. 같은 인스턴스를
+        # 워커 스레드에 넘기면 random.Random 의 내부 상태(gauss 캐시 포함)에 스레드
+        # 경계를 넘는 경합이 생긴다. 워커에는 여기서 파생한 독립 인스턴스를 준다.
+        worker_rng = random.Random(sess.rng.random())
+        items = await asyncio.to_thread(news.fetch_news, plans, worker_rng, _client())
         sess.plans.extend(plans)
         sess.news.extend(items)
     finally:
@@ -159,7 +184,7 @@ class SessionBody(BaseModel):
 class TradeBody(SessionBody):
     symbol: str
     side: str
-    qty: int = Field(gt=0)
+    qty: int
 
 
 class AnalyzeBody(SessionBody):
@@ -179,8 +204,12 @@ async def new_game(background: BackgroundTasks) -> dict:
         first_news_id=0, first_tick=0,
     )
     sess.plans.extend(first)
+    # rng 는 이벤트 루프 스레드의 engine.advance 가 동시에 쓴다. 같은 인스턴스를
+    # 워커 스레드에 넘기면 random.Random 의 내부 상태(gauss 캐시 포함)에 스레드
+    # 경계를 넘는 경합이 생긴다. 워커에는 여기서 파생한 독립 인스턴스를 준다.
+    worker_rng = random.Random(rng.random())
     sess.news.extend(
-        await asyncio.to_thread(news.fetch_news, first, rng, _client())
+        await asyncio.to_thread(news.fetch_news, first, worker_rng, _client())
     )
     sessions[session_id] = sess
     background.add_task(
