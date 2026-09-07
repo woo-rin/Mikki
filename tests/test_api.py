@@ -242,27 +242,55 @@ def test_state_advances_ticks_over_time(client):
     assert state(client, sid)["tick"] >= ELAPSED // config.TICK_SECONDS
 
 
-def test_market_keeps_moving_while_analysis_runs(client, monkeypatch):
-    """분석 호출 중에 시장이 멈추면 '기다리는 시간이 분석의 비용' 규칙이 무효가 된다."""
+def test_analysis_does_not_hold_the_session_lock(client, monkeypatch):
+    """호출이 도는 동안 락을 쥐고 있으면 같은 세션의 폴링이 막혀 시장이 얼어붙는다.
+
+    시장이 멈추면 "기다리는 몇 초가 분석의 실질 비용" 이라는 규칙이 무효가 되고
+    분석이 공짜가 된다. 호출 시점의 락 상태를 직접 관찰한다 — 프록시가 아니라
+    성질 자체를 단정하므로, 락을 다시 호출 전체에 걸치면 이 테스트가 반드시 깨진다.
+    """
     body = start(client, ELAPSED)
     sid = body["session_id"]
     news_id = state(client, sid)["news"][0]["news_id"]
-    before = state(client, sid)["tick"]
 
-    # 호출이 도는 동안 5초가 흐른 것으로 만든다.
+    import app.main as main
+
+    real = main.analysis.fetch_commentary
+    observed = {}
+
+    def probe(item, client_obj):
+        # asyncio.to_thread 의 워커 스레드에서 돈다. 이 순간 락이 잡혀 있으면
+        # 같은 세션의 다른 요청이 전부 막혀 있다는 뜻이다.
+        observed["locked"] = main._locks[sid].locked()
+        return real(item, client_obj)
+
+    monkeypatch.setattr(main.analysis, "fetch_commentary", probe)
+
+    response = client.post(
+        "/api/analyze", json={"session_id": sid, "news_id": news_id}
+    )
+
+    assert response.status_code == 200
+    assert observed["locked"] is False, "분석 호출 중 세션 락이 잡혀 있다"
+    assert response.json()["commentary"].strip()
+
+
+def test_ramp_remaining_is_measured_after_the_call_returns(client, monkeypatch):
+    """느린 호출이 끝난 뒤의 남은 램프를 보고해야 한다 — 요청 시작 시점의 낡은 창이 아니라."""
+    body = start(client, ELAPSED)
+    sid = body["session_id"]
+    news_id = state(client, sid)["news"][0]["news_id"]
+
     import app.main as main
 
     real = main.analysis.fetch_commentary
 
     def slow(item, client_obj):
-        main.sessions[sid].started_at -= 5
+        main.sessions[sid].started_at -= 5   # 호출 중 5초가 흐른 셈
         return real(item, client_obj)
 
     monkeypatch.setattr(main.analysis, "fetch_commentary", slow)
 
-    payload = client.post(
-        "/api/analyze", json={"session_id": sid, "news_id": news_id}
-    ).json()
-
+    before = state(client, sid)["tick"]
+    client.post("/api/analyze", json={"session_id": sid, "news_id": news_id})
     assert state(client, sid)["tick"] >= before + 5
-    assert payload["commentary"].strip()
