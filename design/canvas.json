@@ -1,0 +1,14 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html",       "x": 0,    "y": 0, "w": 1440, "h": 900, "title": "A — 트레이딩 터미널 (본안)" },
+    { "file": "DirectionB.dc.html", "x": 1560, "y": 0, "w": 1440, "h": 900, "title": "B — 에디토리얼 (스케치)" },
+    { "file": "DirectionC.dc.html", "x": 3120, "y": 0, "w": 1440, "h": 900, "title": "C — CRT 터미널 (스케치)" }
+  ],
+  "annotations": [
+    { "id": "brief", "x": 0, "y": -168, "w": 520,
+      "text": "MacBook 16:10 · 1440x900\n좌: 계좌 / AI 분석 잔여 / 뉴스 피드 / 주문\n우: 종목 차트 + 워치리스트\n\nA가 본안입니다. B와 C는 미학 방향만 보는 저해상도 스케치 — 고르시면 그 방향으로 A를 다시 만듭니다." },
+    { "id": "mechanic", "x": 1560, "y": -168, "w": 460,
+      "text": "세 시안 모두 같은 장면을 그립니다: 제노셀 호재로 램프 급등 중, 성진셀즈는 분석 결과 역방향 함정, 태산건영은 과장 기사." }
+  ],
+  "launch": { "view": "focused", "file": "Main.dc.html" }
+}

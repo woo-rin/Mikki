@@ -1,0 +1,146 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&amp;family=IBM+Plex+Sans+KR:wght@500;700&amp;display=swap">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: #060d09; color: #35e07f;
+      font-family: 'IBM Plex Mono', ui-monospace, monospace; word-break: keep-all; }
+    a { color: #ffb000; text-decoration: none; }
+    a:hover { color: #ffc84d; }
+    button { font-family: inherit; }
+    .kr { font-family: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', sans-serif; }
+  </style>
+</helmet>
+<div style="width:1440px;height:900px;position:relative;display:flex;flex-direction:column;background:#060d09;color:#35e07f;overflow:hidden">
+
+  <div style="position:absolute;inset:0;pointer-events:none;z-index:5;background:repeating-linear-gradient(to bottom, rgba(53,224,127,0.045) 0 1px, transparent 1px 3px)"></div>
+
+  <header style="display:flex;align-items:center;gap:16px;height:46px;padding:0 20px;border-bottom:2px solid #1f7a4a;flex:none">
+    <span style="font-size:14px;font-weight:700;letter-spacing:.22em">MOEUI-TRADER</span>
+    <span style="font-size:11px;letter-spacing:.14em;color:#1f7a4a">R01 // T+277 // 04:37</span>
+    <span style="margin-left:auto;font-size:11px;letter-spacing:.14em;color:#ffb000">C — CRT 터미널</span>
+  </header>
+
+  <div style="flex-grow:1;display:flex;min-height:0">
+
+    <div style="width:520px;padding:16px;display:flex;flex-direction:column;gap:14px;border-right:2px solid #1f7a4a;flex:none;min-height:0">
+
+      <div style="border:2px solid #1f7a4a;padding:12px 13px;display:flex;flex-direction:column;gap:9px;flex:none">
+        <span style="font-size:10px;letter-spacing:.2em;color:#1f7a4a">// EQUITY</span>
+        <span style="font-size:32px;font-weight:700;letter-spacing:-.01em;line-height:1;color:#ffb000">2,347,200</span>
+        <div style="display:flex;gap:2px;height:12px">
+          <span style="flex:67;background:#ffb000"></span>
+          <span style="flex:33;background:#123a24"></span>
+        </div>
+        <span style="font-size:10.5px;letter-spacing:.12em;color:#1f7a4a">TARGET 3,000,000 [ 67.4% ] // CASH 412,200 // +134.72%</span>
+      </div>
+
+      <div style="border:2px solid #1f7a4a;padding:10px 13px;display:flex;align-items:center;gap:12px;flex:none">
+        <span style="font-size:10px;letter-spacing:.2em;color:#1f7a4a">// ANALYSIS</span>
+        <span style="margin-left:auto;font-size:15px;font-weight:700;letter-spacing:.28em;color:#ffb000">###--</span>
+        <span style="font-size:11px;letter-spacing:.1em">3/5</span>
+      </div>
+
+      <div style="flex-grow:1;display:flex;flex-direction:column;gap:11px;min-height:0;overflow:hidden">
+        <span style="font-size:10px;letter-spacing:.2em;color:#1f7a4a;flex:none">// NEWSWIRE [7]</span>
+
+        <div style="border-left:3px solid #ffb000;padding:9px 11px;background:#0a1710;display:flex;flex-direction:column;gap:6px;flex:none">
+          <span style="font-size:10px;letter-spacing:.1em;color:#ffb000">&gt; GENO // T-22 RAMP</span>
+          <span class="kr" style="font-size:14px;font-weight:500;line-height:1.5">제노셀, 3상 중간 결과 통계적 유의성 확보</span>
+          <span style="font-size:10.5px;letter-spacing:.08em;color:#1f7a4a">[ PRESS A TO ANALYZE ]</span>
+        </div>
+
+        <div style="border-left:3px solid #55aaff;padding:9px 11px;background:#0a1710;display:flex;flex-direction:column;gap:6px;flex:none">
+          <span style="font-size:10px;letter-spacing:.1em;color:#1f7a4a">&gt; SUNGJIN // ANALYZED</span>
+          <span class="kr" style="font-size:14px;font-weight:500;line-height:1.5">성진셀즈, 유럽 완성차와 공급계약 체결</span>
+          <div style="border:1px dashed #1f7a4a;padding:8px 9px;display:flex;flex-direction:column;gap:5px">
+            <span style="font-size:11px;font-weight:700;letter-spacing:.1em;color:#55aaff">!! VERDICT: STRONG DOWN</span>
+            <p class="kr" style="margin:0;font-size:12px;line-height:1.6;color:#2f9e63">계약 규모가 전년 수주액의 8% 수준이다. 시장은 6월 MOU 시점에 이미 선반영했고, 본문의 &#39;단가 협의 중&#39;이 마진 압박을 시사한다.</p>
+          </div>
+        </div>
+
+        <div style="border-left:3px solid #1f7a4a;padding:9px 11px;display:flex;flex-direction:column;gap:6px;flex:none">
+          <span style="font-size:10px;letter-spacing:.1em;color:#1f7a4a">&gt; TAESAN // ANALYZED</span>
+          <span class="kr" style="font-size:14px;font-weight:500;line-height:1.5">태산건영, 청하지구 1블록 시공사 선정</span>
+          <span style="font-size:11px;font-weight:700;letter-spacing:.1em;color:#1f7a4a">== VERDICT: NO EFFECT</span>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px;flex:none">
+        <div style="display:flex;justify-content:space-between;font-size:10.5px;letter-spacing:.1em;color:#1f7a4a">
+          <span>QTY 32 // 1,531,200</span>
+          <span>FEE 3,062 // MAX 8</span>
+        </div>
+        <div style="display:flex;gap:10px">
+        <div style="flex:1;height:46px;border:2px solid #ff5555;color:#ff5555;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;letter-spacing:.2em">BUY</div>
+        <div style="flex:1;height:46px;border:2px solid #55aaff;color:#55aaff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;letter-spacing:.2em">SELL</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex-grow:1;padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0;min-height:0">
+      <div style="display:flex;align-items:center;gap:14px;flex:none">
+        <span class="kr" style="font-size:18px;font-weight:700">제노셀</span>
+        <span style="font-size:34px;font-weight:700;color:#ff5555;line-height:1;letter-spacing:-.01em">47,850</span>
+        <span style="font-size:13px;font-weight:600;color:#ff5555;letter-spacing:.06em">+6.33% &#9650;</span>
+        <span style="margin-left:auto;font-size:11px;letter-spacing:.12em;color:#1f7a4a">HOLD 32 @ 44,010</span>
+      </div>
+
+      <div style="flex-grow:1;border:2px solid #1f7a4a;min-height:0;position:relative;overflow:hidden">
+        <svg width="100%" height="100%" viewBox="0 0 800 430" preserveAspectRatio="none" style="display:block">
+          <line x1="0" y1="86" x2="800" y2="86" stroke="#123a24" stroke-width="1"/>
+          <line x1="0" y1="172" x2="800" y2="172" stroke="#123a24" stroke-width="1"/>
+          <line x1="0" y1="258" x2="800" y2="258" stroke="#123a24" stroke-width="1"/>
+          <line x1="0" y1="344" x2="800" y2="344" stroke="#123a24" stroke-width="1"/>
+          <rect x="560" y="0" width="240" height="430" fill="#ffb000" opacity="0.09"/>
+          <line x1="560" y1="0" x2="560" y2="430" stroke="#ffb000" stroke-width="1.5" stroke-dasharray="6 5"/>
+          <text x="570" y="22" fill="#ffb000" font-family="'IBM Plex Mono',monospace" font-size="11" letter-spacing="1.4">NEWS</text>
+          <polyline points="0,312 57,298 114,318 171,286 228,306 285,278 342,300 400,270 457,292 514,275 560,282 616,214 673,158 730,102 800,52" fill="none" stroke="#ff5555" stroke-width="2.4"/>
+        </svg>
+      </div>
+
+      <div style="border:2px solid #1f7a4a;display:flex;flex-direction:column;flex:none">
+        <div style="display:flex;align-items:center;height:32px;padding:0 12px;border-bottom:1px solid #123a24;font-size:12px;letter-spacing:.06em">
+          <span style="width:120px">HANBIT</span>
+          <div style="flex-grow:1;height:6px;background:#123a24;max-width:220px"></div>
+          <span style="margin-left:auto;width:80px;text-align:right">83,400</span>
+          <span style="width:76px;text-align:right;color:#ff5555">+1.71%</span>
+        </div>
+        <div style="display:flex;align-items:center;height:32px;padding:0 12px;border-bottom:1px solid #123a24;font-size:12px;letter-spacing:.06em;background:#0e2016;color:#ffb000">
+          <span style="width:120px;font-weight:700">&gt; GENO</span>
+          <div style="flex-grow:1;height:6px;background:#3a2f10;max-width:220px"></div>
+          <span style="margin-left:auto;width:80px;text-align:right">47,850</span>
+          <span style="width:76px;text-align:right;color:#ff5555">+6.33%</span>
+        </div>
+        <div style="display:flex;align-items:center;height:32px;padding:0 12px;border-bottom:1px solid #123a24;font-size:12px;letter-spacing:.06em">
+          <span style="width:120px">SUNGJIN</span>
+          <div style="flex-grow:1;height:6px;background:#123a24;max-width:220px"></div>
+          <span style="margin-left:auto;width:80px;text-align:right">58,200</span>
+          <span style="width:76px;text-align:right;color:#55aaff">-4.59%</span>
+        </div>
+        <div style="display:flex;align-items:center;height:32px;padding:0 12px;border-bottom:1px solid #123a24;font-size:12px;letter-spacing:.06em">
+          <span style="width:120px">PIXEL</span>
+          <div style="flex-grow:1;height:6px;background:#123a24;max-width:220px"></div>
+          <span style="margin-left:auto;width:80px;text-align:right">33,650</span>
+          <span style="width:76px;text-align:right;color:#ff5555">+1.97%</span>
+        </div>
+        <div style="display:flex;align-items:center;height:32px;padding:0 12px;font-size:12px;letter-spacing:.06em">
+          <span style="width:120px">TAESAN</span>
+          <div style="flex-grow:1;height:6px;background:#123a24;max-width:220px"></div>
+          <span style="margin-left:auto;width:80px;text-align:right">18,420</span>
+          <span style="width:76px;text-align:right;color:#55aaff">-0.43%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
