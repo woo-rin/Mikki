@@ -97,6 +97,21 @@ def test_incremental_advance_matches_one_big_advance():
     assert stepwise.last_tick == at_once.last_tick == 100
 
 
+def test_advance_ignores_plans_whose_ramp_already_resolved():
+    """끝난 램프를 계속 넘겨도 결과가 같아야 한다 — 필터가 가격을 바꾸지 않는다는 보장."""
+    resolved = plan(impact=0.10, ramp=20, publish_tick=0, news_id=0)
+
+    with_resolved = new_state()
+    advance(with_resolved, [resolved], to_tick=20, rng=ZeroRandom(0))
+    advance(with_resolved, [resolved], to_tick=200, rng=ZeroRandom(0))
+
+    without = new_state()
+    advance(without, [resolved], to_tick=20, rng=ZeroRandom(0))
+    advance(without, [], to_tick=200, rng=ZeroRandom(0))
+
+    assert with_resolved.log_return == without.log_return
+
+
 def test_advance_to_a_past_tick_is_a_no_op():
     state = new_state()
     advance(state, [], to_tick=50, rng=random.Random(1))

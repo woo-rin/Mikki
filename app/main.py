@@ -223,6 +223,10 @@ async def trade(body: TradeBody) -> dict:
 @app.post("/api/analyze")
 async def analyze(body: AnalyzeBody) -> dict:
     sess = _get(body.session_id)
+
+    # 예산 차감까지만 락 안에서. 호출 자체는 락 밖에서 기다린다 —
+    # 락을 쥔 채 기다리면 같은 세션의 /api/state 폴링이 멈춰 시장이 얼어붙고,
+    # "기다리는 몇 초가 분석의 실질 비용" 이라는 규칙이 무효가 된다.
     async with _lock(body.session_id):
         now = time.monotonic()
         tick = _sync(sess, now)
@@ -236,9 +240,14 @@ async def analyze(body: AnalyzeBody) -> dict:
         except TradeError as error:
             raise _fail(error) from error
 
-        commentary, offline = await asyncio.to_thread(
-            analysis.fetch_commentary, item, _client()
-        )
+    commentary, offline = await asyncio.to_thread(
+        analysis.fetch_commentary, item, _client()
+    )
+
+    # 호출이 도는 동안 시장은 흘렀다. 남은 램프는 지금 시점으로 다시 센다.
+    async with _lock(body.session_id):
+        now = time.monotonic()
+        tick = _sync(sess, now)
         item.analyzed = True
         item.commentary = commentary
         strength = fallback.strength_of(item.plan.impact)

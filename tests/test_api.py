@@ -240,3 +240,29 @@ def test_state_since_returns_only_newer_news(client):
 def test_state_advances_ticks_over_time(client):
     sid = start(client, ELAPSED)["session_id"]
     assert state(client, sid)["tick"] >= ELAPSED // config.TICK_SECONDS
+
+
+def test_market_keeps_moving_while_analysis_runs(client, monkeypatch):
+    """분석 호출 중에 시장이 멈추면 '기다리는 시간이 분석의 비용' 규칙이 무효가 된다."""
+    body = start(client, ELAPSED)
+    sid = body["session_id"]
+    news_id = state(client, sid)["news"][0]["news_id"]
+    before = state(client, sid)["tick"]
+
+    # 호출이 도는 동안 5초가 흐른 것으로 만든다.
+    import app.main as main
+
+    real = main.analysis.fetch_commentary
+
+    def slow(item, client_obj):
+        main.sessions[sid].started_at -= 5
+        return real(item, client_obj)
+
+    monkeypatch.setattr(main.analysis, "fetch_commentary", slow)
+
+    payload = client.post(
+        "/api/analyze", json={"session_id": sid, "news_id": news_id}
+    ).json()
+
+    assert state(client, sid)["tick"] >= before + 5
+    assert payload["commentary"].strip()

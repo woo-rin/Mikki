@@ -35,11 +35,26 @@ def advance(
     rng: random.Random,
 ) -> None:
     """state 를 to_tick 까지 진행한다. to_tick 이 과거면 아무것도 하지 않는다."""
+    if to_tick <= state.last_tick:
+        return
+
+    # 이 구간에 기여할 수 있는 뉴스만 한 번 추린다. plans 는 보충마다 20건씩
+    # 늘고 가지치기되지 않으므로, 램프가 이미 끝난 계획을 매 tick 다시 훑으면
+    # 폴링 비용이 세션 길이에 비례해 커지고, 오래 자리를 비웠다 돌아온 요청이
+    # 이벤트 루프를 붙잡아 다른 플레이어까지 멈춘다.
+    # 난수는 종목 루프에서만 쓰이므로 이 필터는 가격을 바꾸지 않는다.
+    active = [
+        plan
+        for plan in plans
+        if plan.publish_tick < to_tick
+        and plan.publish_tick + plan.ramp_seconds > state.last_tick
+    ]
+
     for tick in range(state.last_tick + 1, to_tick + 1):
         # 종목 순회 순서를 고정해야 증분 계산과 일괄 계산이 같은 난수를 소비한다.
         for symbol, stock in config.STOCKS.items():
             state.log_return[symbol] += stock.volatility * rng.gauss(0.0, 1.0)
-        for plan in plans:
+        for plan in active:
             if plan.publish_tick < tick <= plan.publish_tick + plan.ramp_seconds:
                 state.log_return[plan.symbol] += plan.impact / plan.ramp_seconds
     state.last_tick = max(state.last_tick, to_tick)
