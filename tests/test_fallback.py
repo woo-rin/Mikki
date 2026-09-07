@@ -8,6 +8,10 @@ from app.fallback import (
     strength_of,
     write_commentary,
     write_news,
+    _NEGATIVE_BODIES,
+    _NEGATIVE_HEADLINES,
+    _POSITIVE_BODIES,
+    _POSITIVE_HEADLINES,
 )
 from app.models import NewsPlan
 from app.scenario import build_plans
@@ -89,3 +93,38 @@ def test_commentary_never_leaks_the_raw_impact_number():
     text = write_commentary(items[0])
     assert "0.0937" not in text
     assert "-0.09" not in text
+
+
+def test_text_is_identical_across_kinds_for_the_same_tone_and_seed():
+    """같은 톤·종목·시드면 kind 와 impact 가 무엇이든 문장이 완전히 동일해야 한다.
+
+    문장 선택이 숨겨진 정답에 조금이라도 의존하면 이 테스트가 반드시 깨진다.
+    헤드라인과 본문을 함께 보므로 표본 운에 의존하지 않는다.
+    """
+    produced = set()
+    for kind, impact in (("honest", 0.14), ("exaggerated", 0.004), ("reversed", -0.11)):
+        plan = NewsPlan(0, "geno", "positive", kind, impact, 20, 0)
+        item = write_news([plan], random.Random(99))[0]
+        produced.add((item.headline, item.body))
+    assert len(produced) == 1, "문장이 kind/impact 에 따라 달라진다 — 낚시가 읽기로 들통난다"
+
+
+def test_generated_text_comes_only_from_the_tone_matched_pools():
+    """문장은 반드시 그 표면 톤의 풀에서만 나와야 한다.
+
+    위 테스트는 "정답에 의존하지 않음" 을 보장하고, 이 테스트는 "톤에는 제대로
+    의존함" 을 보장한다. 두 풀을 똑같이 만들어버리는 회귀는 이쪽만 잡는다.
+    """
+    stock = config.STOCKS["geno"]
+    pools = {
+        "positive": (_POSITIVE_HEADLINES, _POSITIVE_BODIES),
+        "negative": (_NEGATIVE_HEADLINES, _NEGATIVE_BODIES),
+    }
+    for tone, (headlines, bodies) in pools.items():
+        allowed_headlines = {t.format(name=stock.name) for t in headlines}
+        allowed_bodies = {t.format(sector=stock.sector) for t in bodies}
+        for kind, impact in (("honest", 0.14), ("exaggerated", 0.004), ("reversed", -0.11)):
+            plan = NewsPlan(0, "geno", tone, kind, impact, 20, 0)
+            item = write_news([plan], random.Random(7))[0]
+            assert item.headline in allowed_headlines, (tone, kind)
+            assert item.body in allowed_bodies, (tone, kind)
