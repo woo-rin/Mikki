@@ -196,10 +196,15 @@ HONEST_RATIO_FLOOR = 0.30
 EXAGGERATED_SHARE = 5
 REVERSED_SHARE = 3
 
+IMPACT_HONEST = (0.05, 0.15)
+IMPACT_EXAGGERATED = (0.00, 0.015)
+IMPACT_REVERSED = (0.06, 0.12)
+
+# kind 로 조회하는 형태가 실제 코드가 쓰는 모양이다. 값의 출처는 위 세 상수 하나뿐이다.
 IMPACT_RANGES: dict[str, tuple[float, float]] = {
-    "honest":      (0.05, 0.15),
-    "exaggerated": (0.00, 0.015),
-    "reversed":    (0.06, 0.12),
+    "honest": IMPACT_HONEST,
+    "exaggerated": IMPACT_EXAGGERATED,
+    "reversed": IMPACT_REVERSED,
 }
 RAMP_SECONDS_RANGE = (15, 40)
 
@@ -217,7 +222,7 @@ ANALYSIS_EFFORT = "low"
 
 ```python
 """도메인 dataclass. 로직은 담지 않는다."""
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -328,6 +333,14 @@ def test_news_ids_are_sequential_from_the_given_start():
     assert [p.news_id for p in plans] == [17, 18, 19, 20]
 
 
+def test_impact_range_constants_and_lookup_table_agree():
+    assert config.IMPACT_RANGES == {
+        "honest": config.IMPACT_HONEST,
+        "exaggerated": config.IMPACT_EXAGGERATED,
+        "reversed": config.IMPACT_REVERSED,
+    }
+
+
 def test_every_plan_names_a_real_stock_and_valid_ramp():
     plans = build_plans(40, 1, random.Random(13), first_news_id=0, first_tick=0)
     lo, hi = config.RAMP_SECONDS_RANGE
@@ -422,7 +435,7 @@ def build_plans(
 - [ ] **Step 7: 테스트가 통과하는 것을 확인한다**
 
 Run: `.venv/bin/pytest tests/test_scenario.py -v`
-Expected: PASS — 11 passed
+Expected: PASS — 12 passed
 
 - [ ] **Step 8: 커밋**
 
