@@ -171,3 +171,21 @@ def test_commentary_falls_back_without_a_client():
     text, offline = fetch_commentary(item, None)
     assert offline is True
     assert text.strip()
+
+
+def test_news_falls_back_when_claude_returns_blank_text():
+    """빈 헤드라인이 offline=False 로 플레이어에게 도달하면 그 항목의 낚시가 무효가 된다."""
+    p = plans(2)
+    client = FakeClient(result=NewsBatch(items=[
+        NewsText(headline="  ", body="본문"),
+        NewsText(headline="제목", body=""),
+    ]))
+    items = fetch_news(p, random.Random(0), client)
+    assert all(i.offline is True for i in items)
+    assert all(i.headline.strip() and i.body.strip() for i in items)
+
+
+def test_analysis_system_prompt_forbids_naming_real_entities():
+    from app.analysis import SYSTEM
+    assert "가상 기업" in SYSTEM
+    assert "실재하" in SYSTEM

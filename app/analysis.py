@@ -20,7 +20,9 @@ SYSTEM = """당신은 증권사 애널리스트입니다.
 - 판정은 이미 정해져 있습니다. 다시 판단하거나 뒤집지 않습니다.
 - 기사에 실제로 있는 표현을 근거로 삼습니다.
 - 2~3문장, 건조한 애널리스트 어투로 씁니다.
-- 수치나 확률을 새로 만들어내지 않습니다. 투자 권유 표현은 쓰지 않습니다."""
+- 수치나 확률을 새로 만들어내지 않습니다. 투자 권유 표현은 쓰지 않습니다.
+- 회사는 모두 가상 기업입니다. 실재하는 기업·인물·기관·정책 사업의 이름을 쓰지 않습니다.
+  실존 여부가 불분명하면 지어내지 말고 일반명사로 씁니다."""
 
 
 class Commentary(BaseModel):
@@ -55,13 +57,17 @@ def fetch_commentary(item: NewsItem, client) -> tuple[str, bool]:
             output_config={"effort": config.ANALYSIS_EFFORT},
             output_format=Commentary,
         )
-        if getattr(response, "stop_reason", None) == "refusal":
-            raise RuntimeError("모델이 요청을 거절했습니다.")
-        parsed = response.parsed_output
-        if parsed is None or not parsed.commentary.strip():
-            raise RuntimeError("빈 해설이 돌아왔습니다.")
     except Exception:
-        log.warning("분석 해설 실패 — 로컬 문장으로 대체합니다.", exc_info=True)
+        log.warning("분석 해설 호출 실패 — 로컬 문장으로 대체합니다.", exc_info=True)
+        return fallback.write_commentary(item), True
+
+    if getattr(response, "stop_reason", None) == "refusal":
+        log.warning("분석 해설을 거절했습니다 — 로컬 문장으로 대체합니다.")
+        return fallback.write_commentary(item), True
+
+    parsed = response.parsed_output
+    if parsed is None or not parsed.commentary.strip():
+        log.warning("빈 해설이 돌아왔습니다 — 로컬 문장으로 대체합니다.")
         return fallback.write_commentary(item), True
 
     return parsed.commentary, False
