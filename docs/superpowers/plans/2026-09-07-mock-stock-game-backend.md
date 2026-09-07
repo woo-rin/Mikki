@@ -1504,6 +1504,48 @@ def test_headline_tone_follows_surface_tone_not_the_real_impact():
     assert positives.isdisjoint(negatives)
 
 
+def test_text_is_identical_across_kinds_for_the_same_tone_and_seed():
+    """같은 톤·종목·시드면 kind 와 impact 가 무엇이든 문장이 완전히 동일해야 한다.
+
+    문장 선택이 숨겨진 정답에 조금이라도 의존하면 이 테스트가 반드시 깨진다.
+    헤드라인과 본문을 함께 보므로 표본 운에 의존하지 않는다.
+    """
+    produced = set()
+    for kind, impact in (("honest", 0.14), ("exaggerated", 0.004), ("reversed", -0.11)):
+        plan = NewsPlan(0, "geno", "positive", kind, impact, 20, 0)
+        item = write_news([plan], random.Random(99))[0]
+        produced.add((item.headline, item.body))
+    assert len(produced) == 1, "문장이 kind/impact 에 따라 달라진다 — 낚시가 읽기로 들통난다"
+
+
+def test_generated_text_comes_only_from_the_tone_matched_pools():
+    """문장은 반드시 그 표면 톤의 풀에서만 나와야 한다.
+
+    위 테스트는 "정답에 의존하지 않음" 을, 이 테스트는 "톤에는 제대로 의존함" 을
+    보장한다. 두 풀을 똑같이 만들어버리는 회귀는 이쪽만 잡는다.
+    """
+    from app.fallback import (
+        _NEGATIVE_BODIES,
+        _NEGATIVE_HEADLINES,
+        _POSITIVE_BODIES,
+        _POSITIVE_HEADLINES,
+    )
+
+    stock = config.STOCKS["geno"]
+    pools = {
+        "positive": (_POSITIVE_HEADLINES, _POSITIVE_BODIES),
+        "negative": (_NEGATIVE_HEADLINES, _NEGATIVE_BODIES),
+    }
+    for tone, (headlines, bodies) in pools.items():
+        allowed_headlines = {t.format(name=stock.name) for t in headlines}
+        allowed_bodies = {t.format(sector=stock.sector) for t in bodies}
+        for kind, impact in (("honest", 0.14), ("exaggerated", 0.004), ("reversed", -0.11)):
+            plan = NewsPlan(0, "geno", tone, kind, impact, 20, 0)
+            item = write_news([plan], random.Random(7))[0]
+            assert item.headline in allowed_headlines, (tone, kind)
+            assert item.body in allowed_bodies, (tone, kind)
+
+
 def test_commentary_states_the_verdict_label():
     plans = build_plans(20, 1, random.Random(9), first_news_id=0, first_tick=0)
     for item in write_news(plans, random.Random(9)):
@@ -1622,7 +1664,7 @@ def write_commentary(item: NewsItem) -> str:
 - [ ] **Step 4: 테스트가 통과하는 것을 확인한다**
 
 Run: `.venv/bin/pytest tests/test_fallback.py -v`
-Expected: PASS — 20 passed
+Expected: PASS — 21 passed
 
 - [ ] **Step 5: 커밋**
 
@@ -2644,14 +2686,20 @@ GET /api/state 가 tick 을 증분 진행한다. 세션마다 asyncio.Lock 을 �
 
 **3. `GRIND_DECAY = 0.6` 을 `GRIND_DECAY_NUM = 3` / `GRIND_DECAY_DEN = 5` 로 바꿨다.** 부동소수점으로 계산하면 `200_000 * 0.6 ** 3 = 43199.99...` 가 되어 노가다 4회차 보수가 스펙이 의도한 43,200 이 아니라 43,199 로 어긋난다. 3/5 는 0.6 과 정확히 같으므로 값은 그대로이고 계산만 정수로 바뀐다.
 
-**4. `start_grind` 가 먼저 정산한다.** 스펙은 노가다의 상태 전이를 이 수준까지 규정하지
+**4. 폴백의 격리 가드를 결정론적 2종으로 보강했다.** 브리프의
+`test_headline_tone_follows_surface_tone_not_the_real_impact` 는 헤드라인만 검사하고
+본문은 무방비였다. 본문 선택을 `plan.impact > 0` 에 의존시켜도 전체 스위트가 통과하는
+것을 실제로 확인했다(기존 19건 전부 통과, 새 2건만 실패). 이 게임의 가장 중요한 불변식이
+생성 텍스트의 절반만 보호되고 있었다. Task 5 리뷰에서 발견했다.
+
+**5. `start_grind` 가 먼저 정산한다.** 스펙은 노가다의 상태 전이를 이 수준까지 규정하지
 않았다. `is_locked` 가 120초 경과 후 정산 여부와 무관하게 `False` 가 되므로, 정산 없이
 재시작하면 `pending_payout` 이 덮어써져 미지급 보수가 영구히 사라진다(1회차 200,000원
 소실을 재현). `start_grind` 가 맨 먼저 `settle_grind` 를 호출하게 한다. 도메인 계층이
 호출자의 호출 순서에 의존해 정확해지면 안 된다. 의도된 귀결: 이전 보수가 파산선을 넘기면
 새 노가다는 `not_bankrupt` 로 거부된다. Task 4 리뷰에서 발견했다.
 
-**5. 가격 상태가 로그가격이 아니라 누적 로그수익을 저장한다.** 스펙 3절의 공식은
+**6. 가격 상태가 로그가격이 아니라 누적 로그수익을 저장한다.** 스펙 3절의 공식은
 `log_price(sym, T) = log(base(sym)) + ...` 로 적혀 있는데, 이대로 구현하면
 `floor(exp(log(base)))` 가 6종목 중 4종목에서 1원을 잃는다(geno 45000→44999,
 pixel 33000→32999, taesan 18500→18499, arawings 24000→23999). tick 0 부터 가격이
@@ -2659,7 +2707,7 @@ pixel 33000→32999, taesan 18500→18499, arawings 24000→23999). tick 0 부�
 `floor(base * exp(누적수익))` 으로 바꾼다 — `exp(0.0)` 이 정확히 `1.0` 이므로 tick 0 가
 정확해진다. Task 2 구현 중 발견했다.
 
-**6. `POLL_INTERVAL_MS` 와 `SPARKLINE_TICKS` 를 `config.py` 에 넣지 않았다.** 둘 다 프론트엔드 전용 수치다. 프론트 계획에서 추가한다.
+**7. `POLL_INTERVAL_MS` 와 `SPARKLINE_TICKS` 를 `config.py` 에 넣지 않았다.** 둘 다 프론트엔드 전용 수치다. 프론트 계획에서 추가한다.
 
 ## 이 계획에 없는 것
 
