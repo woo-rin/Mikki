@@ -459,7 +459,7 @@ git commit -m "feat: 시나리오 배분표와 밸런스 설정
 **Interfaces:**
 - Consumes: `config.STOCKS`, `models.NewsPlan` (Task 1)
 - Produces:
-  - `engine.PriceState` — dataclass, 필드 `log_price: dict[str, float]`, `last_tick: int`
+  - `engine.PriceState` — dataclass, 필드 `log_return: dict[str, float]`, `last_tick: int`
   - `engine.new_state() -> PriceState`
   - `engine.advance(state: PriceState, plans: Sequence[NewsPlan], to_tick: int, rng: random.Random) -> None` — 제자리 변경
   - `engine.price_of(state: PriceState, symbol: str) -> int` — 내림한 정수 원
@@ -566,16 +566,16 @@ def test_incremental_advance_matches_one_big_advance():
     at_once = new_state()
     advance(at_once, plans, to_tick=100, rng=random.Random(42))
 
-    assert stepwise.log_price == at_once.log_price
+    assert stepwise.log_return == at_once.log_return
     assert stepwise.last_tick == at_once.last_tick == 100
 
 
 def test_advance_to_a_past_tick_is_a_no_op():
     state = new_state()
     advance(state, [], to_tick=50, rng=random.Random(1))
-    snapshot = dict(state.log_price)
+    snapshot = dict(state.log_return)
     advance(state, [], to_tick=20, rng=random.Random(1))
-    assert state.log_price == snapshot
+    assert state.log_return == snapshot
     assert state.last_tick == 50
 
 
@@ -586,6 +586,14 @@ def test_noise_actually_moves_prices():
         price_of(state, symbol) != stock.base_price
         for symbol, stock in config.STOCKS.items()
     )
+
+
+def test_base_prices_survive_the_float_round_trip():
+    """log(base) 를 저장하면 exp 왕복에서 1원이 사라진다 — 6종목 중 4종목이 그랬다.
+    누적 로그수익을 저장하고 정수 시작가에 곱해야 tick 0 가 정확하다."""
+    state = new_state()
+    for symbol, stock in config.STOCKS.items():
+        assert price_of(state, symbol) == stock.base_price
 
 
 def test_ramp_progress_clamps_to_zero_and_one():
@@ -615,7 +623,7 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'app.engine'`
 `app/engine.py`:
 
 ```python
-"""가격 엔진. 상태와 목표 tick 을 받아 로그가격을 증분으로 진행한다.
+"""가격 엔진. 상태와 목표 tick 을 받아 누적 로그수익을 증분으로 진행한다.
 
 백그라운드 타이머를 돌리지 않는다. 요청이 올 때 마지막 계산 tick 부터
 현재 tick 까지만 이어서 계산하므로, 500ms 폴링이면 매 요청 0~1 tick 이고
@@ -632,16 +640,15 @@ from app.models import NewsPlan
 
 @dataclass
 class PriceState:
-    log_price: dict[str, float] = field(default_factory=dict)
+    log_return: dict[str, float] = field(default_factory=dict)
     last_tick: int = 0
 
 
 def new_state() -> PriceState:
+    # 로그가격이 아니라 누적 로그수익을 든다. log(base) 를 저장하면 exp 왕복에서
+    # 1원이 사라진다(6종목 중 4종목). 정수 시작가는 정확히 남기고 수익률만 float 로 둔다.
     return PriceState(
-        log_price={
-            symbol: math.log(stock.base_price)
-            for symbol, stock in config.STOCKS.items()
-        },
+        log_return={symbol: 0.0 for symbol in config.STOCKS},
         last_tick=0,
     )
 
@@ -656,16 +663,18 @@ def advance(
     for tick in range(state.last_tick + 1, to_tick + 1):
         # 종목 순회 순서를 고정해야 증분 계산과 일괄 계산이 같은 난수를 소비한다.
         for symbol, stock in config.STOCKS.items():
-            state.log_price[symbol] += stock.volatility * rng.gauss(0.0, 1.0)
+            state.log_return[symbol] += stock.volatility * rng.gauss(0.0, 1.0)
         for plan in plans:
             if plan.publish_tick < tick <= plan.publish_tick + plan.ramp_seconds:
-                state.log_price[plan.symbol] += plan.impact / plan.ramp_seconds
+                state.log_return[plan.symbol] += plan.impact / plan.ramp_seconds
     state.last_tick = max(state.last_tick, to_tick)
 
 
 def price_of(state: PriceState, symbol: str) -> int:
     """원 단위 정수. 내림으로 통일한다."""
-    return math.floor(math.exp(state.log_price[symbol]))
+    return math.floor(
+        config.STOCKS[symbol].base_price * math.exp(state.log_return[symbol])
+    )
 
 
 def ramp_progress(plan: NewsPlan, tick: int) -> float:
@@ -2628,7 +2637,15 @@ GET /api/state 가 tick 을 증분 진행한다. 세션마다 asyncio.Lock 을 �
 
 **3. `GRIND_DECAY = 0.6` 을 `GRIND_DECAY_NUM = 3` / `GRIND_DECAY_DEN = 5` 로 바꿨다.** 부동소수점으로 계산하면 `200_000 * 0.6 ** 3 = 43199.99...` 가 되어 노가다 4회차 보수가 스펙이 의도한 43,200 이 아니라 43,199 로 어긋난다. 3/5 는 0.6 과 정확히 같으므로 값은 그대로이고 계산만 정수로 바뀐다.
 
-**4. `POLL_INTERVAL_MS` 와 `SPARKLINE_TICKS` 를 `config.py` 에 넣지 않았다.** 둘 다 프론트엔드 전용 수치다. 프론트 계획에서 추가한다.
+**4. 가격 상태가 로그가격이 아니라 누적 로그수익을 저장한다.** 스펙 3절의 공식은
+`log_price(sym, T) = log(base(sym)) + ...` 로 적혀 있는데, 이대로 구현하면
+`floor(exp(log(base)))` 가 6종목 중 4종목에서 1원을 잃는다(geno 45000→44999,
+pixel 33000→32999, taesan 18500→18499, arawings 24000→23999). tick 0 부터 가격이
+어긋나고 그 오차가 모든 평가액·파산 판정에 실린다. 수학적으로 동등한 형태인
+`floor(base * exp(누적수익))` 으로 바꾼다 — `exp(0.0)` 이 정확히 `1.0` 이므로 tick 0 가
+정확해진다. Task 2 구현 중 발견했다.
+
+**5. `POLL_INTERVAL_MS` 와 `SPARKLINE_TICKS` 를 `config.py` 에 넣지 않았다.** 둘 다 프론트엔드 전용 수치다. 프론트 계획에서 추가한다.
 
 ## 이 계획에 없는 것
 
