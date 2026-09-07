@@ -276,21 +276,43 @@ def test_analysis_does_not_hold_the_session_lock(client, monkeypatch):
 
 
 def test_ramp_remaining_is_measured_after_the_call_returns(client, monkeypatch):
-    """느린 호출이 끝난 뒤의 남은 램프를 보고해야 한다 — 요청 시작 시점의 낡은 창이 아니라."""
-    body = start(client, ELAPSED)
-    sid = body["session_id"]
-    news_id = state(client, sid)["news"][0]["news_id"]
+    """남은 램프는 호출이 끝난 시점으로 재야 한다 — 요청 시작 시점의 낡은 창이 아니라.
+
+    호출 중에 램프가 끝나고도 남을 만큼 시간을 흘려보낸 뒤, analyze 응답 자체의
+    ramp_remaining 을 단정한다. 이후의 별도 폴링을 보면 tick 이 무상태로 다시
+    계산되므로 낡은 값을 쓰는 구현에서도 통과한다.
+    """
+    import time as _time
 
     import app.main as main
 
+    body = start(client, ELAPSED)
+    sid = body["session_id"]
+    sess = main.sessions[sid]
+
+    # 고른 기사의 램프가 막 시작된 시점으로 시계를 맞춘다. 어떤 기사가 마침
+    # 램프 중이었는지에 기대지 않도록 결정론적으로 세운다.
+    item = sess.news[0]
+    ramp_end = item.plan.publish_tick + item.plan.ramp_seconds
+    sess.started_at = _time.monotonic() - (item.plan.publish_tick + 1)
+
+    pre_tick = state(client, sid)["tick"]
+    assert pre_tick < ramp_end, "설정이 틀렸다 — 호출 전에 이미 램프가 끝났다"
+
+    shift = item.plan.ramp_seconds + 10   # 호출 중 램프가 확실히 끝난다
     real = main.analysis.fetch_commentary
 
-    def slow(item, client_obj):
-        main.sessions[sid].started_at -= 5   # 호출 중 5초가 흐른 셈
-        return real(item, client_obj)
+    def slow(item_arg, client_obj):
+        sess.started_at -= shift
+        return real(item_arg, client_obj)
 
     monkeypatch.setattr(main.analysis, "fetch_commentary", slow)
 
-    before = state(client, sid)["tick"]
-    client.post("/api/analyze", json={"session_id": sid, "news_id": news_id})
-    assert state(client, sid)["tick"] >= before + 5
+    payload = client.post(
+        "/api/analyze", json={"session_id": sid, "news_id": item.plan.news_id}
+    ).json()
+
+    stale = max(0, ramp_end - pre_tick)
+    assert stale > 0, "두 값이 구분되지 않는 설정이다"
+    assert payload["ramp_remaining"] == 0
+    assert payload["already_priced_in"] is True
