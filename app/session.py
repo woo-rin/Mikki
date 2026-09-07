@@ -150,6 +150,9 @@ def grind_payout(grind_count: int) -> int:
 
 
 def start_grind(sess: GameSession, now: float) -> dict:
+    # 이전 노가다의 미지급 보수를 먼저 정산한다. 잠금이 자연히 풀린 뒤 정산 없이
+    # 다시 시작하면 pending_payout 이 덮어써져 미지급액이 영구히 사라진다.
+    settle_grind(sess, now)
     _check_unlocked(sess, now)
     if not is_bankrupt(sess):
         raise TradeError("not_bankrupt", "파산 상태에서만 노가다를 할 수 있습니다.")

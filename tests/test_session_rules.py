@@ -153,6 +153,27 @@ def test_trading_resumes_after_the_lock():
     assert sess.holdings["taesan"] == 1
 
 
+def test_expired_grind_settles_before_a_new_one_can_start():
+    """잠금이 자연히 풀린 뒤 정산 없이 재시작하면 1회차 보수가 사라졌다."""
+    sess = broke(0)
+    start_grind(sess, now=0.0)
+    with pytest.raises(TradeError) as excinfo:
+        start_grind(sess, now=200.0)
+    assert excinfo.value.code == "not_bankrupt"
+    assert sess.cash == 200_000          # 1회차 보수는 사라지지 않고 지급됐다
+
+
+def test_no_payout_is_lost_when_grinding_again_while_still_bankrupt():
+    """보수가 파산선을 넘기지 못하는 회차에서는 연속 노가다가 가능하고, 어느 회차도 사라지지 않는다."""
+    sess = broke(0)
+    sess.grind_count = 4                 # 5회차 보수 25,920 — 파산선을 넘기지 못한다
+    start_grind(sess, now=0.0)
+    start_grind(sess, now=200.0)         # 정산 없이 재시작
+    assert sess.cash == 25_920           # 5회차 보수가 자동 정산됐다
+    settle_grind(sess, now=320.0)
+    assert sess.cash == 25_920 + 15_552  # 6회차 보수까지 정상 지급
+
+
 # ---------------------------------------------------------------- 분석 차감
 
 def test_analysis_budget_runs_out_after_five():
