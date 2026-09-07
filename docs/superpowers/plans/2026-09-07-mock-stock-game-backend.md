@@ -1336,6 +1336,9 @@ def grind_payout(grind_count: int) -> int:
 
 
 def start_grind(sess: GameSession, now: float) -> dict:
+    # 이전 노가다의 미지급 보수를 먼저 정산한다. 잠금이 자연히 풀린 뒤 정산 없이
+    # 다시 시작하면 pending_payout 이 덮어써져 미지급액이 영구히 사라진다.
+    settle_grind(sess, now)
     _check_unlocked(sess, now)
     if not is_bankrupt(sess):
         raise TradeError("not_bankrupt", "파산 상태에서만 노가다를 할 수 있습니다.")
@@ -1381,10 +1384,14 @@ def advance_round(sess: GameSession) -> None:
     sess.grind_count = 0
 ```
 
+`start_grind` 가 `settle_grind` 를 호출하므로, 위 코드 블록의 정의 순서를 그대로 유지한다
+(`settle_grind` 가 파일에서 먼저 정의된다). 순서를 바꾸면 모듈 로드 시점에는 문제가 없지만
+읽는 사람이 호출 방향을 거꾸로 이해한다.
+
 - [ ] **Step 6: 테스트가 통과하는 것을 확인한다**
 
 Run: `.venv/bin/pytest tests/test_session_rules.py tests/test_trade.py -v`
-Expected: PASS — 25 passed (신규 규칙 테스트와 Task 3 매매 테스트 모두)
+Expected: PASS — 38 passed (신규 규칙 24건 + Task 3 매매 14건)
 
 - [ ] **Step 7: 커밋**
 
@@ -2637,7 +2644,14 @@ GET /api/state 가 tick 을 증분 진행한다. 세션마다 asyncio.Lock 을 �
 
 **3. `GRIND_DECAY = 0.6` 을 `GRIND_DECAY_NUM = 3` / `GRIND_DECAY_DEN = 5` 로 바꿨다.** 부동소수점으로 계산하면 `200_000 * 0.6 ** 3 = 43199.99...` 가 되어 노가다 4회차 보수가 스펙이 의도한 43,200 이 아니라 43,199 로 어긋난다. 3/5 는 0.6 과 정확히 같으므로 값은 그대로이고 계산만 정수로 바뀐다.
 
-**4. 가격 상태가 로그가격이 아니라 누적 로그수익을 저장한다.** 스펙 3절의 공식은
+**4. `start_grind` 가 먼저 정산한다.** 스펙은 노가다의 상태 전이를 이 수준까지 규정하지
+않았다. `is_locked` 가 120초 경과 후 정산 여부와 무관하게 `False` 가 되므로, 정산 없이
+재시작하면 `pending_payout` 이 덮어써져 미지급 보수가 영구히 사라진다(1회차 200,000원
+소실을 재현). `start_grind` 가 맨 먼저 `settle_grind` 를 호출하게 한다. 도메인 계층이
+호출자의 호출 순서에 의존해 정확해지면 안 된다. 의도된 귀결: 이전 보수가 파산선을 넘기면
+새 노가다는 `not_bankrupt` 로 거부된다. Task 4 리뷰에서 발견했다.
+
+**5. 가격 상태가 로그가격이 아니라 누적 로그수익을 저장한다.** 스펙 3절의 공식은
 `log_price(sym, T) = log(base(sym)) + ...` 로 적혀 있는데, 이대로 구현하면
 `floor(exp(log(base)))` 가 6종목 중 4종목에서 1원을 잃는다(geno 45000→44999,
 pixel 33000→32999, taesan 18500→18499, arawings 24000→23999). tick 0 부터 가격이
@@ -2645,7 +2659,7 @@ pixel 33000→32999, taesan 18500→18499, arawings 24000→23999). tick 0 부�
 `floor(base * exp(누적수익))` 으로 바꾼다 — `exp(0.0)` 이 정확히 `1.0` 이므로 tick 0 가
 정확해진다. Task 2 구현 중 발견했다.
 
-**5. `POLL_INTERVAL_MS` 와 `SPARKLINE_TICKS` 를 `config.py` 에 넣지 않았다.** 둘 다 프론트엔드 전용 수치다. 프론트 계획에서 추가한다.
+**6. `POLL_INTERVAL_MS` 와 `SPARKLINE_TICKS` 를 `config.py` 에 넣지 않았다.** 둘 다 프론트엔드 전용 수치다. 프론트 계획에서 추가한다.
 
 ## 이 계획에 없는 것
 
