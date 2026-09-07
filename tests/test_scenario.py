@@ -86,3 +86,11 @@ def test_every_plan_names_a_real_stock_and_valid_ramp():
         assert lo <= p.ramp_seconds <= hi
         assert p.surface_tone in ("positive", "negative")
         assert p.kind in ("honest", "exaggerated", "reversed")
+
+
+def test_impact_range_constants_and_lookup_table_agree():
+    assert config.IMPACT_RANGES == {
+        "honest": config.IMPACT_HONEST,
+        "exaggerated": config.IMPACT_EXAGGERATED,
+        "reversed": config.IMPACT_REVERSED,
+    }

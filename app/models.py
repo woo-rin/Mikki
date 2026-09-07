@@ -1,5 +1,5 @@
 """도메인 dataclass. 로직은 담지 않는다."""
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)

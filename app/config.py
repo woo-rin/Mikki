@@ -50,10 +50,15 @@ HONEST_RATIO_FLOOR = 0.30
 EXAGGERATED_SHARE = 5
 REVERSED_SHARE = 3
 
+IMPACT_HONEST = (0.05, 0.15)
+IMPACT_EXAGGERATED = (0.00, 0.015)
+IMPACT_REVERSED = (0.06, 0.12)
+
+# kind 로 조회하는 형태가 실제 코드가 쓰는 모양이다. 값의 출처는 위 세 상수 하나뿐이다.
 IMPACT_RANGES: dict[str, tuple[float, float]] = {
-    "honest":      (0.05, 0.15),
-    "exaggerated": (0.00, 0.015),
-    "reversed":    (0.06, 0.12),
+    "honest": IMPACT_HONEST,
+    "exaggerated": IMPACT_EXAGGERATED,
+    "reversed": IMPACT_REVERSED,
 }
 RAMP_SECONDS_RANGE = (15, 40)
 
