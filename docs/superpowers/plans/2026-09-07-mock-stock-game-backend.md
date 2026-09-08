@@ -10,6 +10,11 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-07-mock-stock-game-design.md`
 
+> **경로 안내**: 이 계획의 본문은 프로젝트 루트를 기준으로 `app/`, `tests/` 로 적혀
+> 있으나, 구현 완료 후 백엔드 일체를 `backend/` 아래로 옮겼다. 실제 경로는
+> `backend/app/`, `backend/tests/`, `backend/pytest.ini`, `backend/requirements.txt` 이고
+> 명령은 `backend/` 를 작업 디렉터리로 실행한다.
+
 ## Global Constraints
 
 이 절의 요구사항은 모든 태스크에 암묵적으로 포함된다.

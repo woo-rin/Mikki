@@ -200,27 +200,39 @@ API 키 없음, 네트워크 끊김, 레이트리밋, `stop_reason == "refusal"`
 
 ```
 ch_03/
-├── app/
-│   ├── config.py      # 모든 밸런스 수치
-│   ├── models.py      # Pydantic 스키마 — 요청/응답/뉴스/포트폴리오
-│   ├── scenario.py    # 시나리오 배분표 생성 (밸런스 규칙 소유)
-│   ├── engine.py      # 가격 엔진 — 증분 tick, 램프 적용
-│   ├── session.py     # 매매·수수료·파산 판정·노가다·라운드 전환
-│   ├── news.py        # Claude 뉴스 배치 + 로컬 템플릿 폴백
-│   ├── analysis.py    # Claude 분석 해설 + 폴백
-│   └── main.py        # FastAPI 라우트만
-├── static/
-│   ├── index.html
-│   ├── app.js
-│   └── style.css
-├── tests/
-│   ├── test_engine.py
-│   ├── test_scenario.py
-│   ├── test_session.py
-│   └── test_news.py
-├── requirements.txt
-└── README.md
+├── backend/                    # 서버. 이 디렉터리 안에서 자족한다
+│   ├── app/
+│   │   ├── config.py           # 모든 밸런스 수치
+│   │   ├── models.py           # 도메인 dataclass
+│   │   ├── scenario.py         # 시나리오 배분표 생성 (밸런스 규칙 소유)
+│   │   ├── engine.py           # 가격 엔진 — 증분 tick, 램프 적용
+│   │   ├── session.py          # 매매·수수료·파산 판정·노가다·라운드 전환
+│   │   ├── fallback.py         # 템플릿 뉴스 + 등급 해설 (Claude 없이)
+│   │   ├── news.py             # Claude 뉴스 배치 → 실패 시 fallback
+│   │   ├── analysis.py         # Claude 분석 해설 → 실패 시 fallback
+│   │   └── main.py             # FastAPI 라우트만
+│   ├── static/                 # 프론트엔드 (아직 없음 — 별도 계획)
+│   │   ├── index.html
+│   │   ├── app.js
+│   │   └── style.css
+│   ├── tests/
+│   │   ├── test_scenario.py
+│   │   ├── test_engine.py
+│   │   ├── test_trade.py
+│   │   ├── test_session_rules.py
+│   │   ├── test_fallback.py
+│   │   ├── test_claude_adapters.py
+│   │   └── test_api.py
+│   ├── pytest.ini              # 경고를 오류로 취급
+│   ├── requirements.txt
+│   └── .venv/                  # git 무시
+├── design/                     # UI 목업 아트보드 (.dc.html)
+└── docs/superpowers/           # 스펙과 구현 계획
 ```
+
+실행은 `backend/` 안에서 한다: `.venv/bin/uvicorn app.main:app`, 테스트는 `.venv/bin/pytest`.
+`main.py` 의 정적 파일 마운트가 cwd 상대 경로이므로 서버는 `backend/` 를 작업 디렉터리로
+띄워야 한다.
 
 ### 모듈 경계
 
