@@ -16,8 +16,18 @@
 
 ```bash
 cd backend
-.venv/bin/uvicorn app.main:app --port 8000
+./run.sh              # 포트 7999 로 고정
 ```
+
+또는 직접:
+
+```bash
+cd backend
+.venv/bin/uvicorn app.main:app --port 7999
+```
+
+> **포트는 7999 다.** `--port` 를 빠뜨리면 uvicorn 기본값인 8000 으로 조용히 떠서
+> 프론트가 엉뚱한 곳을 두드리게 된다. `run.sh` 를 쓰면 그럴 일이 없다.
 
 - **작업 디렉터리는 반드시 `backend/`** 다. `main.py` 의 정적 파일 마운트가 cwd 상대 경로다.
 - `ANTHROPIC_API_KEY` 가 있으면 뉴스와 해설이 Claude 문장, 없으면 로컬 템플릿이다.

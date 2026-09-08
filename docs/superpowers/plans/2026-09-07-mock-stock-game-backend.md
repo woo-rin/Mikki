@@ -2667,15 +2667,15 @@ Expected: PASS — 120 passed
 - [ ] **Step 6: 실제로 한 판을 손으로 돌려본다**
 
 ```bash
-.venv/bin/uvicorn app.main:app --reload --port 8000
+.venv/bin/uvicorn app.main:app --reload --port 7999
 ```
 
 다른 터미널에서:
 
 ```bash
-SID=$(curl -s -X POST localhost:8000/api/game | python3 -c 'import json,sys; print(json.load(sys.stdin)["session_id"])')
-curl -s "localhost:8000/api/state?session_id=$SID" | python3 -m json.tool | head -40
-curl -s -X POST localhost:8000/api/trade -H 'content-type: application/json' \
+SID=$(curl -s -X POST localhost:7999/api/game | python3 -c 'import json,sys; print(json.load(sys.stdin)["session_id"])')
+curl -s "localhost:7999/api/state?session_id=$SID" | python3 -m json.tool | head -40
+curl -s -X POST localhost:7999/api/trade -H 'content-type: application/json' \
   -d "{\"session_id\":\"$SID\",\"symbol\":\"geno\",\"side\":\"buy\",\"qty\":3}" | python3 -m json.tool
 ```
 
