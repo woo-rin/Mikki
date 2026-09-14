@@ -1,6 +1,7 @@
 import './App.css'
 import { AccountPanel } from './components/account/AccountPanel'
 import { Positions } from './components/account/Positions'
+import { OrderTicket } from './components/order/OrderTicket'
 import { ConnectionBanner } from './components/system/ConnectionBanner'
 import { SessionGate } from './components/system/SessionGate'
 import { Toasts } from './components/system/Toasts'
@@ -23,6 +24,7 @@ function Board() {
         <aside className="left">
           <AccountPanel />
           <Positions />
+          <OrderTicket />
         </aside>
         <main className="right">
           <Watchlist />

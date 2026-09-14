@@ -35,3 +35,13 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 .watchlist tr.selected { background: var(--surface-3); }
 .row-pick { display: grid; gap: 2px; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; padding: 0; width: 100%; }
 .row-pick .sector { font-size: 11px; color: var(--ink-3); }
+
+.sides { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap-2); margin-bottom: var(--gap-3); }
+.sides button { background: var(--surface-2); border: 1px solid var(--line); color: var(--ink-2); padding: var(--gap-2); cursor: pointer; font: inherit; }
+.sides button.on { border-color: var(--accent); color: var(--ink); }
+.qty { display: flex; gap: var(--gap-2); align-items: center; margin-bottom: var(--gap-3); }
+.qty label { color: var(--ink-2); }
+.qty input { width: 84px; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink); padding: var(--gap-2); font-family: var(--mono); text-align: right; }
+.qty button { background: var(--surface-2); border: 1px solid var(--line); color: var(--ink); padding: var(--gap-2) var(--gap-3); cursor: pointer; font: inherit; }
+.primary { width: 100%; background: var(--accent); border: 0; color: var(--ground); padding: var(--gap-3); font: inherit; font-weight: 600; cursor: pointer; }
+.primary:disabled { opacity: .4; cursor: not-allowed; }
