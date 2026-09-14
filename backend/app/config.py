@@ -25,6 +25,30 @@ TRADE_FEE_RATE = 0.002
 BANKRUPTCY_THRESHOLD = 100_000
 
 ANALYSES_PER_ROUND = 5
+COMPANY_ANALYSES_PER_ROUND = 2
+
+# 섹터 기준 배수. 실제 시장 평균에서 따왔고, 밸런스 손잡이로 쓴다.
+# PER 은 흑자 분기에, PSR 은 적자 분기에 쓰인다.
+SECTOR_PER: dict[str, float] = {
+    "반도체": 14.0,
+    "바이오": 38.0,
+    "2차전지": 22.0,
+    "게임": 16.0,
+    "건설": 7.5,
+    "항공": 11.0,
+}
+SECTOR_PSR: dict[str, float] = {
+    "반도체": 2.2,
+    "바이오": 6.5,
+    "2차전지": 2.8,
+    "게임": 3.0,
+    "건설": 0.5,
+    "항공": 1.1,
+}
+
+# 등급 경계. 양수가 고평가다.
+VALUATION_SEVERE = 25.0
+VALUATION_MILD = 10.0
 
 GRIND_LOCK_SECONDS = 120
 GRIND_BASE_PAYOUT = 200_000

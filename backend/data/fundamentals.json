@@ -1,0 +1,252 @@
+{
+  "generated_at": "2026-09-14",
+  "source": "임시 스냅샷 — scripts/fetch_fundamentals.py 로 교체해야 한다",
+  "stocks": {
+    "hanbit": {
+      "mapped_from": "실존 반도체 대형주",
+      "quarters": [
+        {
+          "label": "2024Q1",
+          "revenue": 2650000000000,
+          "operating_income": 480000000000,
+          "net_income": 398000000000,
+          "equity": 3200000000000,
+          "debt": 1100000000000,
+          "shares": 68000000
+        },
+        {
+          "label": "2024Q2",
+          "revenue": 2780000000000,
+          "operating_income": 505000000000,
+          "net_income": 421000000000,
+          "equity": 3200000000000,
+          "debt": 1100000000000,
+          "shares": 68000000
+        },
+        {
+          "label": "2024Q3",
+          "revenue": 2510000000000,
+          "operating_income": 430000000000,
+          "net_income": 352000000000,
+          "equity": 3200000000000,
+          "debt": 1100000000000,
+          "shares": 68000000
+        },
+        {
+          "label": "2024Q4",
+          "revenue": 2900000000000,
+          "operating_income": 548000000000,
+          "net_income": 447000000000,
+          "equity": 3200000000000,
+          "debt": 1100000000000,
+          "shares": 68000000
+        }
+      ]
+    },
+    "geno": {
+      "mapped_from": "실존 바이오 중형주",
+      "quarters": [
+        {
+          "label": "2024Q1",
+          "revenue": 81200000000,
+          "operating_income": 16500000000,
+          "net_income": 12800000000,
+          "equity": 240000000000,
+          "debt": 96000000000,
+          "shares": 12400000
+        },
+        {
+          "label": "2024Q2",
+          "revenue": 88000000000,
+          "operating_income": 19200000000,
+          "net_income": 15100000000,
+          "equity": 240000000000,
+          "debt": 96000000000,
+          "shares": 12400000
+        },
+        {
+          "label": "2024Q3",
+          "revenue": 76000000000,
+          "operating_income": -1400000000,
+          "net_income": -3200000000,
+          "equity": 240000000000,
+          "debt": 96000000000,
+          "shares": 12400000
+        },
+        {
+          "label": "2024Q4",
+          "revenue": 94500000000,
+          "operating_income": 22000000000,
+          "net_income": 17600000000,
+          "equity": 240000000000,
+          "debt": 96000000000,
+          "shares": 12400000
+        }
+      ]
+    },
+    "sungjin": {
+      "mapped_from": "실존 2차전지 소재주",
+      "quarters": [
+        {
+          "label": "2024Q1",
+          "revenue": 1740000000000,
+          "operating_income": 158000000000,
+          "net_income": 122000000000,
+          "equity": 1900000000000,
+          "debt": 1250000000000,
+          "shares": 44000000
+        },
+        {
+          "label": "2024Q2",
+          "revenue": 1690000000000,
+          "operating_income": 140000000000,
+          "net_income": 104000000000,
+          "equity": 1900000000000,
+          "debt": 1250000000000,
+          "shares": 44000000
+        },
+        {
+          "label": "2024Q3",
+          "revenue": 1820000000000,
+          "operating_income": 175000000000,
+          "net_income": 136000000000,
+          "equity": 1900000000000,
+          "debt": 1250000000000,
+          "shares": 44000000
+        },
+        {
+          "label": "2024Q4",
+          "revenue": 1905000000000,
+          "operating_income": 192000000000,
+          "net_income": 151000000000,
+          "equity": 1900000000000,
+          "debt": 1250000000000,
+          "shares": 44000000
+        }
+      ]
+    },
+    "pixel": {
+      "mapped_from": "실존 게임 퍼블리셔",
+      "quarters": [
+        {
+          "label": "2024Q1",
+          "revenue": 186000000000,
+          "operating_income": 44000000000,
+          "net_income": 37100000000,
+          "equity": 310000000000,
+          "debt": 62000000000,
+          "shares": 18000000
+        },
+        {
+          "label": "2024Q2",
+          "revenue": 174000000000,
+          "operating_income": 38000000000,
+          "net_income": 31500000000,
+          "equity": 310000000000,
+          "debt": 62000000000,
+          "shares": 18000000
+        },
+        {
+          "label": "2024Q3",
+          "revenue": 198000000000,
+          "operating_income": 49000000000,
+          "net_income": 41200000000,
+          "equity": 310000000000,
+          "debt": 62000000000,
+          "shares": 18000000
+        },
+        {
+          "label": "2024Q4",
+          "revenue": 205000000000,
+          "operating_income": 52000000000,
+          "net_income": 44000000000,
+          "equity": 310000000000,
+          "debt": 62000000000,
+          "shares": 18000000
+        }
+      ]
+    },
+    "taesan": {
+      "mapped_from": "실존 건설 중견주",
+      "quarters": [
+        {
+          "label": "2024Q1",
+          "revenue": 3200000000000,
+          "operating_income": 178000000000,
+          "net_income": 128300000000,
+          "equity": 1600000000000,
+          "debt": 2080000000000,
+          "shares": 52000000
+        },
+        {
+          "label": "2024Q2",
+          "revenue": 3080000000000,
+          "operating_income": 160000000000,
+          "net_income": 112000000000,
+          "equity": 1600000000000,
+          "debt": 2080000000000,
+          "shares": 52000000
+        },
+        {
+          "label": "2024Q3",
+          "revenue": 3340000000000,
+          "operating_income": 195000000000,
+          "net_income": 141500000000,
+          "equity": 1600000000000,
+          "debt": 2080000000000,
+          "shares": 52000000
+        },
+        {
+          "label": "2024Q4",
+          "revenue": 3410000000000,
+          "operating_income": 203000000000,
+          "net_income": 149200000000,
+          "equity": 1600000000000,
+          "debt": 2080000000000,
+          "shares": 52000000
+        }
+      ]
+    },
+    "arawings": {
+      "mapped_from": "실존 항공 운송주",
+      "quarters": [
+        {
+          "label": "2024Q1",
+          "revenue": 2620000000000,
+          "operating_income": 295000000000,
+          "net_income": 209500000000,
+          "equity": 1450000000000,
+          "debt": 2320000000000,
+          "shares": 96000000
+        },
+        {
+          "label": "2024Q2",
+          "revenue": 2710000000000,
+          "operating_income": 318000000000,
+          "net_income": 228000000000,
+          "equity": 1450000000000,
+          "debt": 2320000000000,
+          "shares": 96000000
+        },
+        {
+          "label": "2024Q3",
+          "revenue": 2480000000000,
+          "operating_income": 254000000000,
+          "net_income": 176400000000,
+          "equity": 1450000000000,
+          "debt": 2320000000000,
+          "shares": 96000000
+        },
+        {
+          "label": "2024Q4",
+          "revenue": 2830000000000,
+          "operating_income": 341000000000,
+          "net_income": 247100000000,
+          "equity": 1450000000000,
+          "debt": 2320000000000,
+          "shares": 96000000
+        }
+      ]
+    }
+  }
+}
