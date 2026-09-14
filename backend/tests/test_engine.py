@@ -21,6 +21,17 @@ class ZeroRandom(random.Random):
         return 0.0
 
 
+@pytest.fixture
+def no_anchor(monkeypatch):
+    """앵커를 끄고 램프만 남긴다.
+
+    아래 여섯 테스트는 램프의 산술을 정확한 값으로 단정한다. 앵커가 함께
+    돌면 그 값이 흔들려 무엇을 재는 테스트인지 흐려진다. 두 축이 함께
+    움직이는 것은 test_anchor_* 가 따로 본다.
+    """
+    monkeypatch.setattr(config, "ANCHOR_PULL", 0.0)
+
+
 def _state(rng: random.Random | None = None):
     """테스트용 기본 상태. 오프셋 난수를 고정해 결정론을 유지한다."""
     return new_state(fundamentals.fair_values(1), rng or random.Random(12345))
@@ -38,14 +49,14 @@ def plan(symbol="geno", impact=0.10, ramp=20, publish_tick=0, news_id=0):
     )
 
 
-def test_no_news_and_no_noise_leaves_price_untouched():
+def test_no_news_and_no_noise_leaves_price_untouched(no_anchor):
     state = _state()
     advance(state, [], to_tick=500, rng=ZeroRandom(0))
     for symbol in config.STOCKS:
         assert price_of(state, symbol) == state.start_price[symbol]
 
 
-def test_price_at_ramp_end_equals_base_times_exp_impact():
+def test_price_at_ramp_end_equals_base_times_exp_impact(no_anchor):
     state = _state()
     p = plan(impact=0.10, ramp=20, publish_tick=0)
     advance(state, [p], to_tick=20, rng=ZeroRandom(0))
@@ -53,7 +64,7 @@ def test_price_at_ramp_end_equals_base_times_exp_impact():
     assert price_of(state, "geno") == expected
 
 
-def test_ramp_stops_contributing_after_it_finishes():
+def test_ramp_stops_contributing_after_it_finishes(no_anchor):
     state = _state()
     p = plan(impact=0.10, ramp=20, publish_tick=0)
     advance(state, [p], to_tick=20, rng=ZeroRandom(0))
@@ -62,7 +73,7 @@ def test_ramp_stops_contributing_after_it_finishes():
     assert price_of(state, "geno") == at_end
 
 
-def test_price_midway_through_ramp_is_half_the_impact():
+def test_price_midway_through_ramp_is_half_the_impact(no_anchor):
     state = _state()
     p = plan(impact=0.10, ramp=20, publish_tick=0)
     advance(state, [p], to_tick=10, rng=ZeroRandom(0))
@@ -70,14 +81,14 @@ def test_price_midway_through_ramp_is_half_the_impact():
     assert price_of(state, "geno") == expected
 
 
-def test_negative_impact_pushes_price_down():
+def test_negative_impact_pushes_price_down(no_anchor):
     state = _state()
     p = plan(impact=-0.08, ramp=16, publish_tick=0)
     advance(state, [p], to_tick=16, rng=ZeroRandom(0))
     assert price_of(state, "geno") < state.start_price["geno"]
 
 
-def test_news_only_moves_its_own_symbol():
+def test_news_only_moves_its_own_symbol(no_anchor):
     state = _state()
     p = plan(symbol="geno", impact=0.12, ramp=15, publish_tick=0)
     advance(state, [p], to_tick=15, rng=ZeroRandom(0))
@@ -204,3 +215,82 @@ def test_reanchor_moves_the_anchor_but_not_the_price():
 
     assert {symbol: price_of(state, symbol) for symbol in config.STOCKS} == before
     assert state.anchor_log != before_anchor
+
+
+def _flat_state(fair=10_000, start=13_000):
+    """전 종목을 같은 적정가·시작가에 세운다. 앵커만 따로 관찰하기 위한 것이다."""
+    fair_values = {symbol: fair for symbol in config.STOCKS}
+    state = new_state(fair_values, random.Random(1))
+    state.start_price = {symbol: start for symbol in config.STOCKS}
+    engine.reanchor(state, fair_values)
+    return state, fair
+
+
+def test_anchor_pulls_an_overvalued_stock_down():
+    state, fair = _flat_state(start=13_000)
+    before = price_of(state, "geno")
+    advance(state, [], to_tick=60, rng=ZeroRandom(0))
+    after = price_of(state, "geno")
+
+    assert after < before
+    assert after > fair      # 한 번에 도달하지는 않는다
+
+
+def test_anchor_pushes_an_undervalued_stock_up():
+    state, fair = _flat_state(start=7_000)
+    before = price_of(state, "geno")
+    advance(state, [], to_tick=60, rng=ZeroRandom(0))
+    after = price_of(state, "geno")
+
+    assert after > before
+    assert after < fair
+
+
+def test_anchor_converges_on_the_fair_value():
+    """충분히 오래 두면 적정가에 닿는다."""
+    state, fair = _flat_state(start=13_000)
+    advance(state, [], to_tick=5_000, rng=ZeroRandom(0))
+    assert price_of(state, "geno") == pytest.approx(fair, rel=0.001)
+
+
+def test_anchor_never_overshoots():
+    """평균회귀는 목표를 지나치지 않는다. 지나치면 진동한다."""
+    state, fair = _flat_state(start=13_000)
+    for tick in range(1, 400):
+        advance(state, [], to_tick=tick, rng=ZeroRandom(0))
+        assert price_of(state, "geno") >= fair
+
+
+def test_anchor_pulls_back_after_a_ramp_ends():
+    """호재가 진짜여도 램프가 끝나면 앵커가 되돌린다. 두 축이 싸운다."""
+    state, fair = _flat_state(start=10_000)
+    p = plan(impact=0.20, ramp=20, publish_tick=0)
+
+    advance(state, [p], to_tick=20, rng=ZeroRandom(0))
+    peak = price_of(state, "geno")
+    assert peak > fair
+
+    advance(state, [p], to_tick=400, rng=ZeroRandom(0))
+    assert price_of(state, "geno") < peak
+
+
+def test_anchor_is_weaker_than_a_news_ramp():
+    """앵커가 뉴스를 이기면 AI 분석 5회의 희소성이 무너진다."""
+    state, fair = _flat_state(start=10_000)
+    p = plan(impact=0.10, ramp=30, publish_tick=0)
+    advance(state, [p], to_tick=30, rng=ZeroRandom(0))
+    assert price_of(state, "geno") > fair
+
+
+def test_anchor_keeps_incremental_and_bulk_identical():
+    """앵커는 난수를 쓰지 않는다. 기존 불변식이 유지돼야 한다."""
+    fair = fundamentals.fair_values(1)
+    stepwise = new_state(fair, random.Random(7))
+    rng = random.Random(99)
+    for tick in range(1, 41):
+        advance(stepwise, [], to_tick=tick, rng=rng)
+
+    at_once = new_state(fair, random.Random(7))
+    advance(at_once, [], to_tick=40, rng=random.Random(99))
+
+    assert stepwise.log_return == at_once.log_return

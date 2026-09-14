@@ -79,6 +79,10 @@ def advance(
         # 종목 순회 순서를 고정해야 증분 계산과 일괄 계산이 같은 난수를 소비한다.
         for symbol, stock in config.STOCKS.items():
             state.log_return[symbol] += stock.volatility * rng.gauss(0.0, 1.0)
+            # 적정가까지 남은 로그거리에 비례해 당긴다(Ornstein-Uhlenbeck).
+            # 난수를 쓰지 않으므로 증분/일괄 동일성은 그대로다.
+            gap = state.anchor_log[symbol] - state.log_return[symbol]
+            state.log_return[symbol] += config.ANCHOR_PULL * gap
         for plan in active:
             if plan.publish_tick < tick <= plan.publish_tick + plan.ramp_seconds:
                 state.log_return[plan.symbol] += plan.impact / plan.ramp_seconds
