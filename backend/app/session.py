@@ -6,7 +6,7 @@ import math
 import random
 from dataclasses import dataclass, field
 
-from app import config, engine
+from app import config, engine, fundamentals
 from app.engine import PriceState
 from app.models import NewsItem, NewsPlan
 
@@ -30,6 +30,8 @@ class GameSession:
     round_start_equity: int = config.SEED_CASH
     target: int = config.SEED_CASH * config.ROUND_TARGET_MULTIPLIER
     analyses_left: int = config.ANALYSES_PER_ROUND
+    company_analyses_left: int = config.COMPANY_ANALYSES_PER_ROUND
+    analyzed_symbols: set[str] = field(default_factory=set)
     grind_count: int = 0
     grind_until: float | None = None
     pending_payout: int = 0
@@ -42,7 +44,7 @@ def new_session(session_id: str, rng: random.Random, started_at: float) -> GameS
         session_id=session_id,
         rng=rng,
         started_at=started_at,
-        prices=engine.new_state(),
+        prices=engine.new_state(fundamentals.fair_values(1), rng),
         cash=config.SEED_CASH,
         round_start_equity=config.SEED_CASH,
         target=config.SEED_CASH * config.ROUND_TARGET_MULTIPLIER,
@@ -183,6 +185,24 @@ def spend_analysis(sess: GameSession, now: float) -> None:
     sess.analyses_left -= 1
 
 
+def spend_company_analysis(sess: GameSession, symbol: str, now: float) -> bool:
+    """새로 지불했으면 True, 이미 이 라운드에 산 종목이면 False.
+
+    재무는 라운드 내내 바뀌지 않는다. 같은 값을 두 번 팔면 그냥 함정이다.
+    """
+    _check_unlocked(sess, now)
+    _check_symbol(symbol)
+    if symbol in sess.analyzed_symbols:
+        return False
+    if sess.company_analyses_left <= 0:
+        raise TradeError(
+            "no_company_analyses_left", "이 라운드의 기업분석 횟수를 다 썼습니다."
+        )
+    sess.company_analyses_left -= 1
+    sess.analyzed_symbols.add(symbol)
+    return True
+
+
 # --------------------------------------------------------------- 라운드
 
 def goal_reached(sess: GameSession) -> bool:
@@ -195,4 +215,9 @@ def advance_round(sess: GameSession) -> None:
     sess.round_start_equity = current
     sess.target = current * config.ROUND_TARGET_MULTIPLIER
     sess.analyses_left = config.ANALYSES_PER_ROUND
+    sess.company_analyses_left = config.COMPANY_ANALYSES_PER_ROUND
+    sess.analyzed_symbols.clear()
     sess.grind_count = 0
+    # 새 분기 실적이 적정가를 옮긴다. 지난 라운드에 산 정보가 낡는다.
+    # 가격은 건드리지 않는다 — 점프하면 보유 종목 평가액이 순간이동한다.
+    engine.reanchor(sess.prices, fundamentals.fair_values(sess.round_no))

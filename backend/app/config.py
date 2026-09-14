@@ -6,17 +6,16 @@ from dataclasses import dataclass
 class Stock:
     name: str
     sector: str
-    base_price: int
     volatility: float  # tick당 로그수익 표준편차
 
 
 STOCKS: dict[str, Stock] = {
-    "hanbit":   Stock("한빛솔리드", "반도체",  82_000, 0.0030),
-    "geno":     Stock("제노셀",     "바이오",  45_000, 0.0040),
-    "sungjin":  Stock("성진셀즈",   "2차전지", 61_000, 0.0030),
-    "pixel":    Stock("픽셀로그",   "게임",    33_000, 0.0025),
-    "taesan":   Stock("태산건영",   "건설",    18_500, 0.0015),
-    "arawings": Stock("아라윙스",   "항공",    24_000, 0.0020),
+    "hanbit":   Stock("한빛솔리드", "반도체",  0.0030),
+    "geno":     Stock("제노셀",     "바이오",  0.0040),
+    "sungjin":  Stock("성진셀즈",   "2차전지", 0.0030),
+    "pixel":    Stock("픽셀로그",   "게임",    0.0025),
+    "taesan":   Stock("태산건영",   "건설",    0.0015),
+    "arawings": Stock("아라윙스",   "항공",    0.0020),
 }
 
 SEED_CASH = 1_000_000
@@ -25,6 +24,41 @@ TRADE_FEE_RATE = 0.002
 BANKRUPTCY_THRESHOLD = 100_000
 
 ANALYSES_PER_ROUND = 5
+COMPANY_ANALYSES_PER_ROUND = 2
+
+# 섹터 기준 배수. 실제 시장 평균에서 따왔고, 밸런스 손잡이로 쓴다.
+# PER 은 흑자 분기에, PSR 은 적자 분기에 쓰인다.
+SECTOR_PER: dict[str, float] = {
+    "반도체": 14.0,
+    "바이오": 38.0,
+    "2차전지": 22.0,
+    "게임": 16.0,
+    "건설": 7.5,
+    "항공": 11.0,
+}
+SECTOR_PSR: dict[str, float] = {
+    "반도체": 2.2,
+    "바이오": 6.5,
+    "2차전지": 2.8,
+    "게임": 3.0,
+    "건설": 0.5,
+    "항공": 1.1,
+}
+
+# 등급 경계. 양수가 고평가다.
+VALUATION_SEVERE = 25.0
+VALUATION_MILD = 10.0
+
+# 시작가는 적정가 대비 이 범위에서 뽑는다. 고정 시작가를 쓰면 어느 종목이
+# 고평가인지가 매판 같아서, 한 번 외운 플레이어에게 기업분석이 죽는다.
+START_OFFSET_RANGE = (-0.30, 0.30)
+
+# tick 당 적정가 쪽으로 당기는 비율. 반감기는 ln(2)/0.004 ≈ 173 tick ≈ 2분 53초다.
+#
+# 앵커는 절대 뉴스를 이기면 안 된다. 이기면 뉴스가 장식이 되고 AI 분석 5회의
+# 희소성이 무너진다. 단일 tick 기여(30% 괴리에서 0.10%)가 노이즈(0.15~0.40%)
+# 보다 작아서 즉시 보이지 않고, 방향이 일정해 누적되면 이긴다.
+ANCHOR_PULL = 0.004
 
 GRIND_LOCK_SECONDS = 120
 GRIND_BASE_PAYOUT = 200_000

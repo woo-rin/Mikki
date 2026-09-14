@@ -14,7 +14,16 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import analysis, config, engine, fallback, news, session as rules
+from app import (
+    analysis,
+    company_analysis,
+    config,
+    engine,
+    fallback,
+    fundamentals,
+    news,
+    session as rules,
+)
 from app.models import NewsPlan
 from app.scenario import build_plans
 from app.session import GameSession, TradeError
@@ -91,8 +100,12 @@ def _stock_rows(sess: GameSession) -> list[dict]:
             "sector": stock.sector,
             "price": price,
             # 표시용 백분율이라 돈의 내림 규칙에서 면제된다. 어떤 판정에도 쓰이지 않는다.
-            "change_pct": round((price / stock.base_price - 1) * 100, 2),
+            # 기준은 그 판의 시작가다 — 시작가는 판마다 다르다.
+            "change_pct": round(
+                (price / sess.prices.start_price[symbol] - 1) * 100, 2
+            ),
             "held": sess.holdings.get(symbol, 0),
+            "fundamentals_analyzed": symbol in sess.analyzed_symbols,
         })
     return rows
 
@@ -129,6 +142,7 @@ def _snapshot(sess: GameSession, now: float, since: int = -1) -> dict:
         "target": sess.target,
         "round_start_equity": sess.round_start_equity,
         "analyses_left": sess.analyses_left,
+        "company_analyses_left": sess.company_analyses_left,
         "bankrupt": rules.is_bankrupt(sess),
         "locked": rules.is_locked(sess, now),
         "lock_remaining": rules.lock_remaining(sess, now),
@@ -189,6 +203,10 @@ class TradeBody(SessionBody):
 
 class AnalyzeBody(SessionBody):
     news_id: int
+
+
+class CompanyAnalyzeBody(SessionBody):
+    symbol: str
 
 
 @app.post("/api/game")
@@ -291,6 +309,65 @@ async def analyze(body: AnalyzeBody) -> dict:
             "offline": offline,
             "analyses_left": sess.analyses_left,
         }
+
+
+@app.post("/api/company-analysis")
+async def company_analyze(body: CompanyAnalyzeBody) -> dict:
+    sess = _get(body.session_id)
+
+    # analyze 와 같은 락 패턴이다. 예산 차감까지만 락 안에서, 호출은 락 밖에서.
+    # 락을 쥔 채 기다리면 같은 세션의 /api/state 폴링이 멈춰 시장이 얼어붙는다.
+    async with _lock(body.session_id):
+        now = time.monotonic()
+        _sync(sess, now)
+        try:
+            rules.spend_company_analysis(sess, body.symbol, now)
+        except TradeError as error:
+            raise _fail(error) from error
+
+        # 판정을 락 안에서 확정한다. 밖에서 읽으면 다른 요청이 그 사이 tick 을
+        # 밀어, 응답의 gap_pct 와 current_price 가 서로 다른 순간을 가리킬 수 있다.
+        #
+        # analyze 는 반대로 호출이 끝난 뒤 남은 램프를 다시 잰다 — 램프는 시간에
+        # 닳는 자원이라 기다린 만큼 줄어드는 것이 맞다. 적정가는 라운드 내내
+        # 고정이라 다시 잴 것이 없다.
+        stock = config.STOCKS[body.symbol]
+        quarter = fundamentals.quarter_of(
+            fundamentals.load(), body.symbol, sess.round_no
+        )
+        price = engine.price_of(sess.prices, body.symbol)
+        fair = fundamentals.fair_value(body.symbol, quarter)
+        gap = fundamentals.gap_pct(price, fair)
+        valuation = fundamentals.valuation_of(gap)
+        financials = {
+            "quarter": quarter["label"],
+            "revenue": quarter["revenue"],
+            "operating_income": quarter["operating_income"],
+            "net_income": quarter["net_income"],
+            "eps": fundamentals.eps(quarter),
+            "per": fundamentals.per_of(price, quarter),
+            "debt_ratio": fundamentals.debt_ratio(quarter),
+        }
+        left = sess.company_analyses_left
+
+    commentary, offline = await asyncio.to_thread(
+        company_analysis.fetch_commentary,
+        stock.name, stock.sector, valuation, gap, financials, _client(),
+    )
+
+    return {
+        "symbol": body.symbol,
+        "name": stock.name,
+        "fair_value": fair,
+        "current_price": price,
+        "gap_pct": gap,
+        "valuation": valuation,
+        "label": fundamentals.VALUATION_LABELS[valuation],
+        "financials": financials,
+        "commentary": commentary,
+        "offline": offline,
+        "company_analyses_left": left,
+    }
 
 
 @app.post("/api/grind")
