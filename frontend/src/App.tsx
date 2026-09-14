@@ -4,6 +4,7 @@ import { Positions } from './components/account/Positions'
 import { ConnectionBanner } from './components/system/ConnectionBanner'
 import { SessionGate } from './components/system/SessionGate'
 import { Toasts } from './components/system/Toasts'
+import { Watchlist } from './components/watchlist/Watchlist'
 import { useGameLoop } from './hooks/useGameLoop'
 import { useGameStore } from './store/gameStore'
 
@@ -23,7 +24,9 @@ function Board() {
           <AccountPanel />
           <Positions />
         </aside>
-        <main className="right" />
+        <main className="right">
+          <Watchlist />
+        </main>
       </div>
     </div>
   )
