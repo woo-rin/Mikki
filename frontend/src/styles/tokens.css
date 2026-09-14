@@ -1,0 +1,42 @@
+/* design/Main.dc.html 의 팔레트를 그대로 옮긴 것이다.
+   미학 방향(A/B/C)이 정해지면 바꾸는 곳은 이 파일 하나다. */
+:root {
+  --ground: #0e1116;
+  --surface: #12171e;
+  --surface-2: #151a21;
+  --surface-3: #1b212a;
+  --line: #262d38;
+  --line-strong: #313a47;
+  --ink: #e6e9ee;
+  --ink-2: #8b95a5;
+  --ink-3: #5d6673;
+  --accent: #e8b04b;
+  --up: #f2453d;
+  --down: #2f7ef0;
+
+  --gap-1: 4px;
+  --gap-2: 8px;
+  --gap-3: 12px;
+  --gap-4: 16px;
+  --gap-5: 24px;
+
+  --sans: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-width: 1280px;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.6;
+  word-break: keep-all;
+}
+
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.up { color: var(--up); }
+.down { color: var(--down); }
