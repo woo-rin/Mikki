@@ -1,0 +1,94 @@
+import { beforeEach, describe, expect, it } from 'vitest'
+import { baseSnapshot, capturedAnalyze, capturedTrade, sampleNews } from '../mocks/fixtures'
+import { useDerivedStore } from './derivedStore'
+import { useGameStore } from './gameStore'
+import { useUiStore } from './uiStore'
+
+beforeEach(() => {
+  useGameStore.getState().reset()
+  useDerivedStore.getState().reset()
+})
+
+describe('gameStore', () => {
+  it('더 새로운 스냅샷만 받는다', () => {
+    const g = useGameStore.getState()
+    g.applySnapshot(baseSnapshot({ tick: 10 }), 1)
+    g.applySnapshot(baseSnapshot({ tick: 3 }), 0) // 뒤늦게 도착한 옛 응답
+    expect(useGameStore.getState().snapshot?.tick).toBe(10)
+  })
+
+  it('체결 응답이 즉시 현금에 반영된다', () => {
+    const g = useGameStore.getState()
+    g.applySnapshot(baseSnapshot(), 1)
+    g.applyTrade(capturedTrade)
+    expect(useGameStore.getState().snapshot?.cash).toBe(910_586)
+  })
+
+  it('분석 응답이 즉시 잔여 횟수에 반영된다', () => {
+    const g = useGameStore.getState()
+    g.applySnapshot(baseSnapshot(), 1)
+    g.applyAnalyze(capturedAnalyze)
+    expect(useGameStore.getState().snapshot?.analyses_left).toBe(4)
+  })
+
+  it('노가다는 잠그지만 현금을 늘리지 않는다', () => {
+    const g = useGameStore.getState()
+    g.applySnapshot(baseSnapshot({ cash: 50_000 }), 1)
+    g.applyGrind({ payout: 200_000, lock_remaining: 120, grind_count: 1 })
+    const snap = useGameStore.getState().snapshot
+    expect(snap?.cash).toBe(50_000)
+    expect(snap?.locked).toBe(true)
+  })
+
+  it('forceSnapshot 은 시퀀스를 건드리지 않아 이후 폴링이 계속 먹힌다', () => {
+    const g = useGameStore.getState()
+    g.applySnapshot(baseSnapshot({ tick: 1 }), 1)
+    g.forceSnapshot(baseSnapshot({ round_no: 2, tick: 1 }))
+    expect(useGameStore.getState().snapshot?.round_no).toBe(2)
+    useGameStore.getState().applySnapshot(baseSnapshot({ tick: 99 }), 2)
+    expect(useGameStore.getState().snapshot?.tick).toBe(99)
+  })
+})
+
+describe('derivedStore', () => {
+  it('스냅샷에서 이력과 뉴스를 쌓는다', () => {
+    const d = useDerivedStore.getState()
+    d.record(baseSnapshot({ tick: 1, news: [sampleNews()] }))
+    d.record(baseSnapshot({ tick: 2 }))
+    const s = useDerivedStore.getState()
+    expect(s.history['hanbit']).toHaveLength(2)
+    expect(s.feed).toHaveLength(1)
+  })
+
+  it('체결로만 평단이 생긴다', () => {
+    const d = useDerivedStore.getState()
+    d.recordFill(capturedTrade) // buy geno 2 @ 44618, fee 178
+    const pos = useDerivedStore.getState().positions['geno']
+    expect(pos?.qty).toBe(2)
+    expect(pos?.avg).toBe(Math.floor((44_618 * 2 + 178) / 2))
+  })
+
+  it('매도가 수량을 줄인다', () => {
+    const d = useDerivedStore.getState()
+    d.recordFill(capturedTrade)
+    useDerivedStore.getState().recordFill({ ...capturedTrade, side: 'sell', qty: 2 })
+    expect(useDerivedStore.getState().positions['geno']?.qty).toBe(0)
+  })
+
+  it('분석 결과가 피드에 붙는다', () => {
+    const d = useDerivedStore.getState()
+    d.record(baseSnapshot({ tick: 300, news: [sampleNews()] }))
+    useDerivedStore.getState().recordAnalysis(capturedAnalyze, 300)
+    expect(useDerivedStore.getState().feed[0]?.analysis?.label).toBe('무영향')
+  })
+})
+
+describe('uiStore', () => {
+  it('토스트를 쌓고 지운다', () => {
+    useUiStore.getState().pushToast('현금이 부족합니다.', 'error')
+    const id = useUiStore.getState().toasts[0]?.id
+    expect(id).toBeDefined()
+    useUiStore.getState().dismissToast(id!)
+    expect(useUiStore.getState().toasts).toHaveLength(0)
+  })
+})
