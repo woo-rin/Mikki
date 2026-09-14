@@ -1,9 +1,10 @@
+import json
 import math
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app import config
+from app import config, fundamentals
 from app.main import _refilling, app, sessions
 
 # 뉴스는 12~18초 간격으로 등장하므로 tick 0 에는 아직 한 건도 보이지 않는다.
@@ -331,3 +332,117 @@ def test_ramp_remaining_is_measured_after_the_call_returns(client, monkeypatch):
     assert stale > 0, "두 값이 구분되지 않는 설정이다"
     assert payload["ramp_remaining"] == 0
     assert payload["already_priced_in"] is True
+
+
+# ------------------------------------------------------------ 기업분석
+
+def analyze_company(client, session_id: str, symbol: str):
+    return client.post(
+        "/api/company-analysis", json={"session_id": session_id, "symbol": symbol}
+    )
+
+
+def test_snapshot_reports_company_analyses_left(client):
+    snapshot = start(client)
+    assert snapshot["company_analyses_left"] == config.COMPANY_ANALYSES_PER_ROUND
+    assert all(row["fundamentals_analyzed"] is False for row in snapshot["stocks"])
+
+
+def test_snapshot_never_leaks_fair_value(client):
+    """적정가가 스냅샷에 실리면 F12 한 번으로 기업분석이 무의미해진다."""
+    snapshot = start(client, ELAPSED)
+    raw = json.dumps(snapshot, ensure_ascii=False)
+    assert "fair_value" not in raw
+    assert "valuation" not in raw
+
+
+def test_company_analysis_returns_the_verdict(client):
+    sid = start(client)["session_id"]
+    body = analyze_company(client, sid, "geno").json()
+
+    assert body["symbol"] == "geno"
+    assert body["name"] == config.STOCKS["geno"].name
+    assert body["fair_value"] > 0
+    assert body["valuation"] in fundamentals.VALUATION_LABELS
+    assert body["label"] == fundamentals.VALUATION_LABELS[body["valuation"]]
+    assert body["commentary"].strip()
+    assert body["company_analyses_left"] == config.COMPANY_ANALYSES_PER_ROUND - 1
+    assert body["financials"]["quarter"] == "2024Q1"
+
+
+def test_company_analysis_verdict_matches_the_prices(client):
+    """등급이 실제 가격·적정가와 어긋나면 앵커와 모순된다."""
+    sid = start(client)["session_id"]
+    body = analyze_company(client, sid, "geno").json()
+
+    expected_gap = fundamentals.gap_pct(body["current_price"], body["fair_value"])
+    assert body["gap_pct"] == expected_gap
+    assert body["valuation"] == fundamentals.valuation_of(expected_gap)
+
+
+def test_company_analysis_marks_the_stock_in_the_snapshot(client):
+    sid = start(client)["session_id"]
+    analyze_company(client, sid, "geno")
+
+    rows = {row["symbol"]: row for row in state(client, sid)["stocks"]}
+    assert rows["geno"]["fundamentals_analyzed"] is True
+    assert rows["hanbit"]["fundamentals_analyzed"] is False
+
+
+def test_company_analysis_is_free_the_second_time(client):
+    sid = start(client)["session_id"]
+    first = analyze_company(client, sid, "geno").json()
+    second = analyze_company(client, sid, "geno").json()
+    assert second["company_analyses_left"] == first["company_analyses_left"]
+    assert second["fair_value"] == first["fair_value"]
+
+
+def test_company_analysis_runs_out(client):
+    sid = start(client)["session_id"]
+    for symbol in list(config.STOCKS)[: config.COMPANY_ANALYSES_PER_ROUND]:
+        assert analyze_company(client, sid, symbol).status_code == 200
+    remaining = list(config.STOCKS)[config.COMPANY_ANALYSES_PER_ROUND]
+
+    response = analyze_company(client, sid, remaining)
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "no_company_analyses_left"
+
+
+def test_company_analysis_rejects_unknown_symbol(client):
+    sid = start(client)["session_id"]
+    response = analyze_company(client, sid, "nope")
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "unknown_symbol"
+
+
+def test_company_analysis_does_not_hold_the_session_lock(client, monkeypatch):
+    """해설을 기다리는 동안 락을 쥐면 같은 세션의 폴링이 막혀 시장이 얼어붙는다.
+
+    analyze 와 같은 성질이다. 호출 시점의 락 상태를 직접 관찰한다 — 프록시가
+    아니라 성질 자체를 단정하므로, 락을 호출 전체에 걸치면 반드시 깨진다.
+    """
+    sid = start(client, ELAPSED)["session_id"]
+
+    import app.main as main
+
+    real = main.company_analysis.fetch_commentary
+    observed = {}
+
+    def probe(name, sector, valuation, gap, financials, client_obj):
+        # asyncio.to_thread 의 워커 스레드에서 돈다.
+        observed["locked"] = main._locks[sid].locked()
+        return real(name, sector, valuation, gap, financials, client_obj)
+
+    monkeypatch.setattr(main.company_analysis, "fetch_commentary", probe)
+
+    response = analyze_company(client, sid, "geno")
+
+    assert response.status_code == 200
+    assert observed["locked"] is False, "기업분석 호출 중 세션 락이 잡혀 있다"
+    assert response.json()["commentary"].strip()
+
+
+def test_company_analysis_rejects_a_dead_session(client):
+    response = analyze_company(client, "없는세션", "geno")
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "no_session"
