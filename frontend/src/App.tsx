@@ -1,6 +1,8 @@
 import './App.css'
 import { AccountPanel } from './components/account/AccountPanel'
+import { GrindPanel } from './components/account/GrindPanel'
 import { Positions } from './components/account/Positions'
+import { RoundPanel } from './components/account/RoundPanel'
 import { PriceChart } from './components/chart/PriceChart'
 import { NewsFeed } from './components/news/NewsFeed'
 import { OrderTicket } from './components/order/OrderTicket'
@@ -25,6 +27,8 @@ function Board() {
       <div className="cols">
         <aside className="left">
           <AccountPanel />
+          <RoundPanel />
+          <GrindPanel />
           <Positions />
           <OrderTicket />
           <NewsFeed />

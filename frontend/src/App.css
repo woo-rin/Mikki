@@ -63,3 +63,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 .commentary { margin: var(--gap-2) 0 0; font-size: 13px; color: var(--ink-2); }
 
 .chart { width: 100%; height: 240px; display: block; background: var(--surface-2); border: 1px solid var(--line); }
+
+.panel.warn { border-color: var(--up); }
+.panel.goal { border-color: var(--accent); }
+.panel.warn p, .panel.goal p { margin: 0 0 var(--gap-3); }
