@@ -6,7 +6,7 @@ import math
 import random
 from dataclasses import dataclass, field
 
-from app import config, engine
+from app import config, engine, fundamentals
 from app.engine import PriceState
 from app.models import NewsItem, NewsPlan
 
@@ -42,7 +42,7 @@ def new_session(session_id: str, rng: random.Random, started_at: float) -> GameS
         session_id=session_id,
         rng=rng,
         started_at=started_at,
-        prices=engine.new_state(),
+        prices=engine.new_state(fundamentals.fair_values(1), rng),
         cash=config.SEED_CASH,
         round_start_equity=config.SEED_CASH,
         target=config.SEED_CASH * config.ROUND_TARGET_MULTIPLIER,

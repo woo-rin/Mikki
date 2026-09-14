@@ -91,7 +91,10 @@ def _stock_rows(sess: GameSession) -> list[dict]:
             "sector": stock.sector,
             "price": price,
             # 표시용 백분율이라 돈의 내림 규칙에서 면제된다. 어떤 판정에도 쓰이지 않는다.
-            "change_pct": round((price / stock.base_price - 1) * 100, 2),
+            # 기준은 그 판의 시작가다 — 시작가는 판마다 다르다.
+            "change_pct": round(
+                (price / sess.prices.start_price[symbol] - 1) * 100, 2
+            ),
             "held": sess.holdings.get(symbol, 0),
         })
     return rows

@@ -16,16 +16,41 @@ from app.models import NewsPlan
 @dataclass
 class PriceState:
     log_return: dict[str, float] = field(default_factory=dict)
+    start_price: dict[str, int] = field(default_factory=dict)
+    anchor_log: dict[str, float] = field(default_factory=dict)
     last_tick: int = 0
 
 
-def new_state() -> PriceState:
-    # 로그가격이 아니라 누적 로그수익을 든다. log(base) 를 저장하면 exp 왕복에서
-    # 1원이 사라진다(6종목 중 4종목). 정수 시작가는 정확히 남기고 수익률만 float 로 둔다.
+def new_state(fair_values: dict[str, int], rng: random.Random) -> PriceState:
+    """적정가 대비 랜덤 위치에서 출발한다.
+
+    로그가격이 아니라 누적 로그수익을 든다. log(start) 를 저장하면 exp 왕복에서
+    1원이 사라진다(6종목 중 4종목). 정수 시작가는 정확히 남기고 수익률만 float 로 둔다.
+    """
+    lo, hi = config.START_OFFSET_RANGE
+    start_price: dict[str, int] = {}
+    anchor_log: dict[str, float] = {}
+    # 종목 순회 순서를 고정해야 같은 시드가 같은 판을 만든다.
+    for symbol in config.STOCKS:
+        fair = fair_values[symbol]
+        start = max(1, math.floor(fair * (1.0 + rng.uniform(lo, hi))))
+        start_price[symbol] = start
+        anchor_log[symbol] = math.log(fair / start)
     return PriceState(
         log_return={symbol: 0.0 for symbol in config.STOCKS},
+        start_price=start_price,
+        anchor_log=anchor_log,
         last_tick=0,
     )
+
+
+def reanchor(state: PriceState, fair_values: dict[str, int]) -> None:
+    """적정가만 갱신한다. start_price 와 log_return 은 건드리지 않는다.
+
+    가격이 점프하면 플레이어가 들고 있던 종목의 평가액이 순간이동한다.
+    """
+    for symbol, fair in fair_values.items():
+        state.anchor_log[symbol] = math.log(fair / state.start_price[symbol])
 
 
 def advance(
@@ -62,9 +87,7 @@ def advance(
 
 def price_of(state: PriceState, symbol: str) -> int:
     """원 단위 정수. 내림으로 통일한다."""
-    return math.floor(
-        config.STOCKS[symbol].base_price * math.exp(state.log_return[symbol])
-    )
+    return math.floor(state.start_price[symbol] * math.exp(state.log_return[symbol]))
 
 
 def ramp_progress(plan: NewsPlan, tick: int) -> float:

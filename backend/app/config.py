@@ -6,17 +6,16 @@ from dataclasses import dataclass
 class Stock:
     name: str
     sector: str
-    base_price: int
     volatility: float  # tick당 로그수익 표준편차
 
 
 STOCKS: dict[str, Stock] = {
-    "hanbit":   Stock("한빛솔리드", "반도체",  82_000, 0.0030),
-    "geno":     Stock("제노셀",     "바이오",  45_000, 0.0040),
-    "sungjin":  Stock("성진셀즈",   "2차전지", 61_000, 0.0030),
-    "pixel":    Stock("픽셀로그",   "게임",    33_000, 0.0025),
-    "taesan":   Stock("태산건영",   "건설",    18_500, 0.0015),
-    "arawings": Stock("아라윙스",   "항공",    24_000, 0.0020),
+    "hanbit":   Stock("한빛솔리드", "반도체",  0.0030),
+    "geno":     Stock("제노셀",     "바이오",  0.0040),
+    "sungjin":  Stock("성진셀즈",   "2차전지", 0.0030),
+    "pixel":    Stock("픽셀로그",   "게임",    0.0025),
+    "taesan":   Stock("태산건영",   "건설",    0.0015),
+    "arawings": Stock("아라윙스",   "항공",    0.0020),
 }
 
 SEED_CASH = 1_000_000
@@ -49,6 +48,10 @@ SECTOR_PSR: dict[str, float] = {
 # 등급 경계. 양수가 고평가다.
 VALUATION_SEVERE = 25.0
 VALUATION_MILD = 10.0
+
+# 시작가는 적정가 대비 이 범위에서 뽑는다. 고정 시작가를 쓰면 어느 종목이
+# 고평가인지가 매판 같아서, 한 번 외운 플레이어에게 기업분석이 죽는다.
+START_OFFSET_RANGE = (-0.30, 0.30)
 
 GRIND_LOCK_SECONDS = 120
 GRIND_BASE_PAYOUT = 200_000
