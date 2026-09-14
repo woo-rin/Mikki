@@ -52,6 +52,37 @@ _COMMENTARY = {
 }
 
 
+_VALUATION_COMMENTARY = {
+    "severely_overvalued": "{name} 의 현재가는 {sector} 섹터 기준 배수로 설명되지 않는 수준이다. 판정: {label}. 괴리는 {gap:+.1f}% 다.",
+    "overvalued": "{name} 은 {sector} 섹터 기준 배수를 웃돈다. 판정: {label}. 괴리는 {gap:+.1f}% 로, 재료가 식으면 되돌림이 나온다.",
+    "fair": "{name} 의 현재가는 {sector} 섹터 기준 배수에 부합한다. 판정: {label}. 괴리는 {gap:+.1f}% 다. 여기서는 뉴스가 방향을 정한다.",
+    "undervalued": "{name} 은 {sector} 섹터 기준 배수를 밑돈다. 판정: {label}. 괴리는 {gap:+.1f}% 로, 재료 없이도 되돌아올 여지가 있다.",
+    "severely_undervalued": "{name} 의 현재가는 {sector} 섹터 기준 배수와 크게 벌어져 있다. 판정: {label}. 괴리는 {gap:+.1f}% 다.",
+}
+
+
+def write_company_commentary(
+    name: str, sector: str, valuation: str, gap: float, financials: dict
+) -> str:
+    """확정된 밸류에이션 등급을 사람 말로 옮긴다. 판정은 여기서 다시 하지 않는다."""
+    # fundamentals 도 config 를 임포트한다. 최상단에서 서로를 부르면 순환이
+    # 생길 수 있어 호출 시점으로 미룬다.
+    from app import fundamentals
+
+    head = _VALUATION_COMMENTARY[valuation].format(
+        name=name, sector=sector, gap=gap,
+        label=fundamentals.VALUATION_LABELS[valuation],
+    )
+    if financials.get("per") is None:
+        tail = " 이번 분기는 적자라 이익 기준 배수가 성립하지 않아 매출 기준으로 봤다."
+    else:
+        tail = (
+            f" 현재 PER 은 {financials['per']}배, "
+            f"부채비율은 {financials['debt_ratio']}% 다."
+        )
+    return head + tail
+
+
 def strength_of(impact: float) -> str:
     """임팩트 절대값으로 5단계 등급을 매긴다. 원시 수치는 밖으로 내보내지 않는다."""
     magnitude = abs(impact)
