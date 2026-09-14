@@ -1,6 +1,7 @@
 import './App.css'
 import { AccountPanel } from './components/account/AccountPanel'
 import { Positions } from './components/account/Positions'
+import { PriceChart } from './components/chart/PriceChart'
 import { NewsFeed } from './components/news/NewsFeed'
 import { OrderTicket } from './components/order/OrderTicket'
 import { ConnectionBanner } from './components/system/ConnectionBanner'
@@ -29,6 +30,7 @@ function Board() {
           <NewsFeed />
         </aside>
         <main className="right">
+          <PriceChart />
           <Watchlist />
         </main>
       </div>
