@@ -3,7 +3,7 @@ import { HttpResponse, http } from 'msw'
 import { capturedCompanyAnalysis } from '../mocks/fixtures'
 import { server } from '../mocks/server'
 import { ApiError } from './client'
-import { analyze, companyAnalysis, getState, grind, newGame, nextRound, trade } from './endpoints'
+import { analyze, companyAnalysis, getState, grind, newGame, trade } from './endpoints'
 
 describe('엔드포인트', () => {
   it('새 게임은 시작 스냅샷을 준다 — 뉴스는 빈 배열이 정상이다', async () => {
@@ -46,10 +46,6 @@ describe('엔드포인트', () => {
     expect(res.lock_remaining).toBe(120)
   })
 
-  it('라운드 전환은 스냅샷을 준다', async () => {
-    const snap = await nextRound('s')
-    expect(snap.round_no).toBe(2)
-  })
 
   it('기업분석은 적정가와 밸류에이션 등급을 준다', async () => {
     const res = await companyAnalysis('s', 'geno')

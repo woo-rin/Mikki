@@ -4,6 +4,12 @@ import { useGameStore } from '../../store/gameStore'
 /**
  * 항상 보이는 요약. 라운드 달성처럼 **놓치면 안 되는 것**은 탭에 묻지 않고 여기 띄운다.
  */
+/** 남은 시간을 분:초로. 경주에는 결승선이 있다. */
+function clock(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  return `${m}:${String(seconds - m * 60).padStart(2, '0')}`
+}
+
 export function TopBar() {
   const snap = useGameStore((s) => s.snapshot)
   if (!snap) return null
@@ -11,8 +17,12 @@ export function TopBar() {
   return (
     <header className="topbar">
       <strong className="brand">미끼</strong>
-      <span className="num">{`R${snap.round_no}`}</span>
-      <span className="num">{`${snap.tick}s`}</span>
+      <span
+        className={snap.seconds_left <= 60 ? 'num clock urgent' : 'num clock'}
+        aria-label="남은 시간"
+      >
+        {clock(snap.seconds_left)}
+      </span>
 
       <span className="spacer" />
 
@@ -38,7 +48,7 @@ export function TopBar() {
         <span className="num">{snap.company_analyses_left}</span>
       </span>
 
-      {snap.goal_reached && <span className="tb-goal">목표 달성 — 다음 라운드로</span>}
+      {snap.goal_reached && <span className="tb-goal">목표 달성</span>}
     </header>
   )
 }

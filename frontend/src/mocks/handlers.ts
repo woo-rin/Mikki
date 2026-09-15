@@ -12,7 +12,4 @@ export const handlers = [
   http.post('/api/grind', () =>
     HttpResponse.json({ payout: 200_000, lock_remaining: 120, grind_count: 1 }),
   ),
-  http.post('/api/next-round', () =>
-    HttpResponse.json(baseSnapshot({ round_no: 2, analyses_left: 5 })),
-  ),
 ]

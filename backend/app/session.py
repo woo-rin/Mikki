@@ -30,8 +30,6 @@ class GameSession:
     # 종목별 누적 매입원가(수수료 포함). holdings 의 모양은 건드리지 않는다 —
     # 읽는 곳이 여럿이라 파급이 크다.
     cost_basis: dict[str, int] = field(default_factory=dict)
-    # 프론트가 상단바에 쓰고 있어 1 로 남긴다. 프론트 전환 때 함께 지운다.
-    round_no: int = 1
     target: int = config.SEED_CASH * config.TARGET_MULTIPLIER
     analyses_left: int = config.ANALYSES_PER_ROUND
     company_analyses_left: int = config.COMPANY_ANALYSES_PER_ROUND

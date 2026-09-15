@@ -19,9 +19,9 @@ def test_round_one_allocation_is_twelve_five_three():
 
 
 def test_allocation_always_sums_to_total():
-    for round_no in range(1, 8):
+    for stage in range(1, 8):
         for total in (5, 12, 20, 33):
-            counts = allocate(total, round_no)
+            counts = allocate(total, stage)
             assert sum(counts.values()) == total
 
 

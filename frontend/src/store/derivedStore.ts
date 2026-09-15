@@ -13,8 +13,8 @@ interface DerivedState {
   trades: TradeRow[]
   /** 산 종목의 적정가와 등급. 스냅샷에 없으므로 여기서만 산다. */
   valuations: Record<string, CompanyAnalysisResult>
-  /** 라운드가 바뀐 것을 알아보기 위한 표식 */
-  roundNo: number | null
+  /** 세션이 바뀐 것을 알아보기 위한 표식 */
+  sessionId: string | null
 
   record: (snap: Snapshot) => void
   recordAnalysis: (res: AnalyzeResult, tick: number) => void
@@ -26,18 +26,18 @@ export const useDerivedStore = create<DerivedState>((set) => ({
   feed: [],
   trades: [],
   valuations: {},
-  roundNo: null,
+  sessionId: null,
 
   record: (snap) =>
     set((s) => {
-      // 라운드 N 은 N분기 실적을 본다. 라운드가 넘어가면 적정가가 움직이므로
-      // 지난 라운드에 산 값은 틀린 정보다. 서버도 fundamentals_analyzed 를 리셋한다.
-      const rolled = s.roundNo !== null && s.roundNo !== snap.round_no
+      // 판이 바뀌면 산 적정가는 다른 게임의 것이다. 라운드가 사라졌으므로
+      // 초기화 시점은 새 세션뿐이다.
+      const rolled = s.sessionId !== null && s.sessionId !== snap.session_id
       return {
-        feed: upsertNews(s.feed, snap),
-        trades: appendTrades(s.trades, snap.trades),
+        feed: rolled ? upsertNews([], snap) : upsertNews(s.feed, snap),
+        trades: rolled ? snap.trades : appendTrades(s.trades, snap.trades),
         valuations: rolled ? {} : s.valuations,
-        roundNo: snap.round_no,
+        sessionId: snap.session_id,
       }
     }),
 
@@ -46,5 +46,5 @@ export const useDerivedStore = create<DerivedState>((set) => ({
   recordValuation: (res) =>
     set((s) => ({ valuations: { ...s.valuations, [res.symbol]: res } })),
 
-  reset: () => set({ feed: [], trades: [], valuations: {}, roundNo: null }),
+  reset: () => set({ feed: [], trades: [], valuations: {}, sessionId: null }),
 }))

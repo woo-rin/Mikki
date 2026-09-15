@@ -5,8 +5,8 @@ import { TradeFeed } from './components/ai/TradeFeed'
 import { GrindOverlay } from './components/account/GrindOverlay'
 import { GrindPanel } from './components/account/GrindPanel'
 import { Positions } from './components/account/Positions'
-import { RoundPanel } from './components/account/RoundPanel'
 import { PriceChart } from './components/chart/PriceChart'
+import { RaceResult } from './components/race/RaceResult'
 import { FundamentalsPanel } from './components/fundamentals/FundamentalsPanel'
 import { NewsFeed } from './components/news/NewsFeed'
 import { OrderTicket } from './components/order/OrderTicket'
@@ -36,7 +36,6 @@ function TabPane({ bankrupt }: { bankrupt: boolean }) {
     return (
       <>
         <AccountPanel />
-        <RoundPanel />
         <Positions />
         {/* 평소에는 여기 조용히 있는다. 파산하면 우측으로 끌려 나간다. */}
         {!bankrupt && <GrindPanel />}
@@ -78,6 +77,8 @@ export default function App() {
       <SessionGate><Board /></SessionGate>
       {/* 판 위에 덮는다. 블러 너머로 시장이 계속 움직이는 것이 보여야 한다. */}
       <GrindOverlay />
+      {/* 경주가 끝나면 그 위를 덮는다. */}
+      <RaceResult />
       <Toasts />
     </>
   )

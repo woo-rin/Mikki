@@ -52,8 +52,8 @@ describe('gameStore', () => {
   it('forceSnapshot 은 시퀀스를 건드리지 않아 이후 폴링이 계속 먹힌다', () => {
     const g = useGameStore.getState()
     g.applySnapshot(baseSnapshot({ tick: 1 }), 1)
-    g.forceSnapshot(baseSnapshot({ round_no: 2, tick: 1 }))
-    expect(useGameStore.getState().snapshot?.round_no).toBe(2)
+    g.forceSnapshot(baseSnapshot({ session_id: 'other', tick: 1 }))
+    expect(useGameStore.getState().snapshot?.session_id).toBe('other')
     useGameStore.getState().applySnapshot(baseSnapshot({ tick: 99 }), 2)
     expect(useGameStore.getState().snapshot?.tick).toBe(99)
   })
@@ -80,23 +80,23 @@ describe('derivedStore', () => {
 
 describe('기업분석 보관', () => {
   it('종목별로 보관한다', () => {
-    useDerivedStore.getState().record(baseSnapshot({ round_no: 1 }))
+    useDerivedStore.getState().record(baseSnapshot())
     useDerivedStore.getState().recordValuation(capturedCompanyAnalysis)
     expect(useDerivedStore.getState().valuations['geno']?.label).toBe('고평가')
     expect(useDerivedStore.getState().valuations['hanbit']).toBeUndefined()
   })
 
-  it('같은 라운드에서는 유지된다', () => {
-    useDerivedStore.getState().record(baseSnapshot({ round_no: 1, tick: 1 }))
+  it('같은 판에서는 유지된다', () => {
+    useDerivedStore.getState().record(baseSnapshot({ tick: 1 }))
     useDerivedStore.getState().recordValuation(capturedCompanyAnalysis)
-    useDerivedStore.getState().record(baseSnapshot({ round_no: 1, tick: 2 }))
+    useDerivedStore.getState().record(baseSnapshot({ tick: 2 }))
     expect(useDerivedStore.getState().valuations['geno']).toBeDefined()
   })
 
-  it('라운드가 바뀌면 비운다 — 적정가가 분기마다 움직인다', () => {
-    useDerivedStore.getState().record(baseSnapshot({ round_no: 1 }))
+  it('새 판이 시작되면 비운다 — 다른 게임의 적정가다', () => {
+    useDerivedStore.getState().record(baseSnapshot())
     useDerivedStore.getState().recordValuation(capturedCompanyAnalysis)
-    useDerivedStore.getState().record(baseSnapshot({ round_no: 2 }))
+    useDerivedStore.getState().record(baseSnapshot({ session_id: 'other' }))
     expect(useDerivedStore.getState().valuations).toEqual({})
   })
 })

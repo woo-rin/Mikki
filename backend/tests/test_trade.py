@@ -25,7 +25,6 @@ def test_new_session_starts_with_seed_cash_and_no_holdings():
     assert sess.cash == config.SEED_CASH
     assert sess.holdings == {}
     assert equity(sess) == config.SEED_CASH
-    assert sess.round_no == 1
     assert sess.target == config.SEED_CASH * config.TARGET_MULTIPLIER
     assert sess.analyses_left == config.ANALYSES_PER_ROUND
 

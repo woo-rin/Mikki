@@ -97,13 +97,13 @@ describe('기업분석 패널 — 적자 분기', () => {
   })
 })
 
-describe('기업분석 패널 — 라운드와 오류', () => {
-  it('라운드가 바뀌면 산 값이 사라지고 다시 사야 한다', async () => {
+describe('기업분석 패널 — 새 판과 오류', () => {
+  it('새 판이 시작되면 산 값이 사라지고 다시 사야 한다', async () => {
     render(<FundamentalsPanel />)
     await userEvent.click(screen.getByRole('button', { name: '기업분석' }))
     await screen.findByText('39,216원')
 
-    const next = baseSnapshot({ round_no: 2, company_analyses_left: 2 })
+    const next = baseSnapshot({ session_id: 'other', company_analyses_left: 2 })
     act(() => {
       useGameStore.getState().forceSnapshot(next)
       useDerivedStore.getState().record(next)

@@ -54,7 +54,3 @@ export function companyAnalysis(
 export function grind(sessionId: string): Promise<GrindResult> {
   return postJson<GrindResult>('/api/grind', { session_id: sessionId })
 }
-
-export function nextRound(sessionId: string): Promise<Snapshot> {
-  return postJson<Snapshot>('/api/next-round', { session_id: sessionId })
-}

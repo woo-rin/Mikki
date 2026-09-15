@@ -212,7 +212,6 @@ def _snapshot(
     return {
         "session_id": sess.session_id,
         "tick": tick,
-        "round_no": sess.round_no,
         "cash": sess.cash,
         "equity": rules.equity(sess),
         "target": sess.target,

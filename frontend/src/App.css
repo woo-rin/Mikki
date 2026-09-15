@@ -222,3 +222,28 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
   .swing { transform: rotate(-20deg); }
   .scoop { transform: rotate(18deg); }
 }
+
+/* ── 마감 시계 ─────────────────────────────────────────────── */
+/* 경주에는 결승선이 있다. 1분 아래면 "지금 팔아야 하나" 가 조여온다. */
+.clock { font-size: 15px; }
+.clock.urgent { color: var(--accent); font-weight: 600; }
+
+/* ── 경주 결과 ─────────────────────────────────────────────── */
+.race-over {
+  position: fixed; inset: 0; z-index: 60;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--ground) 72%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.race-card {
+  display: grid; justify-items: center; gap: var(--gap-3);
+  background: var(--surface); border: 1px solid var(--line-strong);
+  padding: var(--gap-4) calc(var(--gap-4) * 2);
+  min-width: 340px; text-align: center;
+}
+.race-title { margin: 0; font-size: 22px; }
+.race-card .hint { margin: 0; }
+.race-rank { margin: var(--gap-2) 0; }
+.race-rank td { padding: var(--gap-2) var(--gap-3); }
+.race-rank tr[data-me='true'] { font-weight: 600; }

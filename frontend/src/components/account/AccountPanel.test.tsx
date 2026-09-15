@@ -14,14 +14,23 @@ beforeEach(() => {
 describe('계좌', () => {
   it('현금·총자산·목표와 진행률을 보여준다', () => {
     useGameStore.getState().applySnapshot(
-      baseSnapshot({ cash: 1_500_000, equity: 2_000_000, round_start_equity: 1_000_000 }),
+      baseSnapshot({ cash: 1_500_000, equity: 2_000_000 }),
       1,
     )
     render(<AccountPanel />)
     expect(screen.getByText('1,500,000원')).toBeInTheDocument()
     expect(screen.getByText('2,000,000원')).toBeInTheDocument()
-    // (2,000,000 - 1,000,000) / (3,000,000 - 1,000,000) = 50%
+    // 진행은 현금으로 잰다: 1,500,000 / 3,000,000 = 50%
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50')
+  })
+
+  it('사서 오르기만 하면 진행바가 안 움직인다 — 그게 현금 목표의 요점이다', () => {
+    useGameStore.getState().applySnapshot(
+      baseSnapshot({ cash: 0, equity: 2_900_000 }),
+      1,
+    )
+    render(<AccountPanel />)
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0')
   })
 
   it('남은 분석 횟수를 항상 보여준다', () => {

@@ -48,7 +48,6 @@ def test_new_game_returns_seed_state(client):
     body = start(client)
     assert body["cash"] == config.SEED_CASH
     assert body["equity"] == config.SEED_CASH
-    assert body["round_no"] == 1
     assert body["target"] == config.SEED_CASH * config.TARGET_MULTIPLIER
     assert body["analyses_left"] == config.ANALYSES_PER_ROUND
     assert len(body["stocks"]) == len(config.STOCKS)
@@ -657,11 +656,11 @@ def test_next_round_is_gone(client):
     assert response.status_code in (404, 405)
 
 
-def test_snapshot_has_no_round_start_equity(client):
+def test_snapshot_has_no_round_leftovers(client):
+    """라운드가 통째로 사라졌다. 프론트도 더 이상 안 쓴다."""
     body = start(client)
     assert "round_start_equity" not in body
-    # round_no 는 프론트 호환을 위해 1 로 남는다. 프론트 전환 때 지운다.
-    assert body["round_no"] == 1
+    assert "round_no" not in body
 
 
 # ------------------------------------------------------------ 경주 종료

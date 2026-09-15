@@ -5,13 +5,12 @@ export function AccountPanel() {
   const snap = useGameStore((s) => s.snapshot)
   if (!snap) return null
 
-  const span = snap.target - snap.round_start_equity
+  // 진행은 **현금**으로 잰다. 사서 오르기만 하면 안 움직이는 것이 맞다 —
+  // 목표는 "레이스를 얼마나 달렸나" 이고 팔아서 확정한 것만 센다.
   const progress =
-    span <= 0
+    snap.target <= 0
       ? 100
-      : Math.round(
-          Math.min(1, Math.max(0, (snap.equity - snap.round_start_equity) / span)) * 100,
-        )
+      : Math.round(Math.min(1, Math.max(0, snap.cash / snap.target)) * 100)
 
   return (
     <section className="panel">

@@ -45,6 +45,14 @@ export interface AiRow {
   rank: number
 }
 
+/** 최종 순위 한 줄. 종료 전에는 ranking 이 null 이다. */
+export interface RankRow {
+  rank: number
+  name: string
+  cash: number
+  is_player: boolean
+}
+
 /** 체결 한 건. 플레이어 자신의 체결은 actor 가 "you" 다. */
 export interface TradeRow {
   seq: number
@@ -73,11 +81,9 @@ export interface NewsItem {
 export interface Snapshot {
   session_id: string
   tick: number
-  round_no: number
   cash: number
   equity: number
   target: number
-  round_start_equity: number
   analyses_left: number
   /** 남은 기업분석 횟수 (0~2). AI 분석과 별개 풀이다. */
   company_analyses_left: number
@@ -93,6 +99,15 @@ export interface Snapshot {
   ai: AiRow[]
   /** trades_since 로 걸러진 체결. 증분이므로 클라이언트가 누적해야 한다. */
   trades: TradeRow[]
+  status: 'running' | 'finished'
+  /** 경주 전체 길이(초) */
+  race_seconds: number
+  /** 마감까지 남은 초. 0 이면 끝났다 */
+  seconds_left: number
+  /** 종료 시에만. 1위가 승자다 */
+  ranking: RankRow[] | null
+  /** 종료 시 승자 이름. 플레이어면 "you" */
+  winner: string | null
 }
 
 export interface TradeResult {
