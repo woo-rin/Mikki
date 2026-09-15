@@ -4,6 +4,8 @@ __pycache__/
 
 # 생성물 — 원본에서 다시 만들 수 있다
 docs/superpowers/specs/*.pdf
+frontend/node_modules/
+backend/static/
 design/*.html
 !design/*.dc.html
 
