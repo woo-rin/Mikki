@@ -7,7 +7,6 @@ from app import config, engine, fundamentals, participants
 from app.models import NewsPlan
 from app.session import (
     TradeError,
-    advance_round,
     ai_rows,
     buy,
     equity,
@@ -228,33 +227,6 @@ def test_goal_reached_at_target():
     assert goal_reached(sess) is True
 
 
-def test_advance_round_triples_the_target_and_refills():
-    sess = fresh()
-    sess.cash = 3_000_000
-    sess.analyses_left = 0
-    sess.grind_count = 2
-
-    advance_round(sess)
-
-    assert sess.round_no == 2
-    assert sess.round_start_equity == 3_000_000
-    assert sess.target == 9_000_000
-    assert sess.analyses_left == config.ANALYSES_PER_ROUND
-    assert sess.grind_count == 0
-
-
-def test_grind_payout_resets_with_the_round():
-    """라운드가 넘어가면 노가다 회차가 초기화되어 다시 20만부터다."""
-    sess = fresh()
-    sess.grind_count = 3
-    sess.cash = sess.target
-    advance_round(sess)
-    sess.cash = 0
-    start_grind(sess, now=0.0)
-    settle_grind(sess, now=config.GRIND_LOCK_SECONDS)
-    assert sess.cash == 200_000
-
-
 # ------------------------------------------------------------ 기업분석
 
 def test_company_analysis_starts_at_the_configured_count():
@@ -303,27 +275,6 @@ def test_company_analysis_is_blocked_while_grinding():
     with pytest.raises(TradeError) as caught:
         spend_company_analysis(sess, "geno", now=1.0)
     assert caught.value.code == "locked"
-
-
-def test_advance_round_refills_company_analyses_and_clears_symbols():
-    sess = fresh()
-    spend_company_analysis(sess, "geno", now=0.0)
-    sess.cash = sess.target
-
-    advance_round(sess)
-
-    assert sess.company_analyses_left == config.COMPANY_ANALYSES_PER_ROUND
-    assert sess.analyzed_symbols == set()
-
-
-def test_advance_round_does_not_move_prices():
-    sess = fresh()
-    before = {s: engine.price_of(sess.prices, s) for s in config.STOCKS}
-    sess.cash = sess.target
-
-    advance_round(sess)
-
-    assert {s: engine.price_of(sess.prices, s) for s in config.STOCKS} == before
 
 
 # ------------------------------------------------------- 체결 피드와 AI

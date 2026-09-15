@@ -240,27 +240,6 @@ def test_grind_pays_out_once_the_lock_expires(client):
     assert snapshot["cash"] == 50_000 + config.GRIND_BASE_PAYOUT
 
 
-def test_next_round_requires_reaching_the_goal(client):
-    sid = start(client)["session_id"]
-    response = client.post("/api/next-round", json={"session_id": sid})
-    assert response.status_code == 400
-    assert response.json()["detail"]["code"] == "goal_not_reached"
-
-
-def test_next_round_triples_the_target_and_refills_analyses(client):
-    sid = start(client)["session_id"]
-    sess = sessions[sid]
-    sess.cash = sess.target
-    sess.analyses_left = 0
-
-    response = client.post("/api/next-round", json={"session_id": sid})
-    assert response.status_code == 200
-    body = response.json()
-    assert body["round_no"] == 2
-    assert body["analyses_left"] == config.ANALYSES_PER_ROUND
-    assert body["target"] == sess.round_start_equity * config.TARGET_MULTIPLIER
-
-
 def test_state_since_returns_only_newer_news(client):
     body = start(client, ELAPSED)
     sid = body["session_id"]
@@ -669,3 +648,17 @@ def test_sweeping_also_drops_the_lock_and_refill_marks(client):
 
     assert stale not in main._locks
     assert stale not in main._refilling
+
+
+def test_next_round_is_gone(client):
+    """한 판 = 한 경주다. 라운드 전환이 낄 자리가 없다."""
+    sid = start(client)["session_id"]
+    response = client.post("/api/next-round", json={"session_id": sid})
+    assert response.status_code in (404, 405)
+
+
+def test_snapshot_has_no_round_start_equity(client):
+    body = start(client)
+    assert "round_start_equity" not in body
+    # round_no 는 프론트 호환을 위해 1 로 남는다. 프론트 전환 때 지운다.
+    assert body["round_no"] == 1

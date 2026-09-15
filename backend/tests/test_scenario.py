@@ -94,3 +94,9 @@ def test_impact_range_constants_and_lookup_table_agree():
         "exaggerated": config.IMPACT_EXAGGERATED,
         "reversed": config.IMPACT_REVERSED,
     }
+
+
+def test_later_batches_get_more_traps():
+    """라운드가 사라져도 난이도 곡선은 남는다 — 이제 뉴스 배치가 단계다."""
+    assert honest_ratio(1) > honest_ratio(2) > honest_ratio(3)
+    assert honest_ratio(9) == config.HONEST_RATIO_FLOOR

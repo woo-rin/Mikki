@@ -30,8 +30,8 @@ class GameSession:
     # 종목별 누적 매입원가(수수료 포함). holdings 의 모양은 건드리지 않는다 —
     # 읽는 곳이 여럿이라 파급이 크다.
     cost_basis: dict[str, int] = field(default_factory=dict)
+    # 프론트가 상단바에 쓰고 있어 1 로 남긴다. 프론트 전환 때 함께 지운다.
     round_no: int = 1
-    round_start_equity: int = config.SEED_CASH
     target: int = config.SEED_CASH * config.TARGET_MULTIPLIER
     analyses_left: int = config.ANALYSES_PER_ROUND
     company_analyses_left: int = config.COMPANY_ANALYSES_PER_ROUND
@@ -72,7 +72,6 @@ def new_session(
         quarter_index=quarter_index,
         prices=engine.new_state(fundamentals.fair_values(quarter_index), rng),
         cash=config.SEED_CASH,
-        round_start_equity=config.SEED_CASH,
         target=config.SEED_CASH * config.TARGET_MULTIPLIER,
         last_seen=started_at,
         ais=participants.new_participants(ai_count),
@@ -267,20 +266,6 @@ def goal_reached(sess: GameSession) -> bool:
     팔 이유가 없다 — 매도가 장식이 된다.
     """
     return sess.cash >= sess.target
-
-
-def advance_round(sess: GameSession) -> None:
-    current = equity(sess)
-    sess.round_no += 1
-    sess.round_start_equity = current
-    sess.target = current * config.TARGET_MULTIPLIER
-    sess.analyses_left = config.ANALYSES_PER_ROUND
-    sess.company_analyses_left = config.COMPANY_ANALYSES_PER_ROUND
-    sess.analyzed_symbols.clear()
-    sess.grind_count = 0
-    # 새 분기 실적이 적정가를 옮긴다. 지난 라운드에 산 정보가 낡는다.
-    # 가격은 건드리지 않는다 — 점프하면 보유 종목 평가액이 순간이동한다.
-    engine.reanchor(sess.prices, fundamentals.fair_values(sess.quarter_index))
 
 
 # --------------------------------------------------- 체결 피드와 거래량

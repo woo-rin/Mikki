@@ -191,7 +191,6 @@ def _snapshot(
         "cash": sess.cash,
         "equity": rules.equity(sess),
         "target": sess.target,
-        "round_start_equity": sess.round_start_equity,
         "analyses_left": sess.analyses_left,
         "company_analyses_left": sess.company_analyses_left,
         "ai": rules.ai_rows(sess),
@@ -217,9 +216,11 @@ def _pending_count(sess: GameSession, tick: int) -> int:
 
 def _next_batch_plans(sess: GameSession, count: int) -> list[NewsPlan]:
     last_tick = sess.plans[-1].publish_tick if sess.plans else 0
+    # 단계는 뉴스 배치 번호다. 긴 경주일수록 함정이 늘어난다.
+    stage = len(sess.plans) // config.NEWS_BATCH_SIZE + 1
     return build_plans(
         count,
-        sess.round_no,
+        stage,
         sess.rng,
         first_news_id=len(sess.plans),
         first_tick=last_tick,
@@ -288,7 +289,7 @@ async def new_game(
 
     # 첫 배치만 기다린다. 20건을 한 번에 기다리면 게임 시작이 10초를 넘는다.
     first = build_plans(
-        config.NEWS_FIRST_WAIT_COUNT, sess.round_no, rng,
+        config.NEWS_FIRST_WAIT_COUNT, 1, rng,
         first_news_id=0, first_tick=0,
     )
     sess.plans.extend(first)
@@ -465,20 +466,6 @@ async def grind(body: SessionBody) -> dict:
             "lock_remaining": rules.lock_remaining(sess, now),
             "grind_count": sess.grind_count,
         }
-
-
-@app.post("/api/next-round")
-async def next_round(body: SessionBody) -> dict:
-    sess = _get(body.session_id)
-    async with _lock(body.session_id):
-        now = time.monotonic()
-        _sync(sess, now)
-        if not rules.goal_reached(sess):
-            raise HTTPException(
-                400, {"code": "goal_not_reached", "message": "목표 자산에 아직 닿지 않았습니다."}
-            )
-        rules.advance_round(sess)
-        return _snapshot(sess, now)
 
 
 if os.path.isdir("static"):
