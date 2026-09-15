@@ -86,4 +86,14 @@ describe('판 껍데기', () => {
     await userEvent.click(screen.getByRole('tab', { name: '내 포지션' }))
     expect(useGameLoop).toHaveBeenCalled()
   })
+
+  it('참가자 탭에 순위와 체결이 함께 있다', async () => {
+    seat()
+    render(<Board />)
+    await userEvent.click(screen.getByRole('tab', { name: '참가자' }))
+    expect(screen.getByRole('heading', { name: '순위' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '체결' })).toBeInTheDocument()
+    // 차트와 주문은 여기서도 보인다
+    expect(screen.getByRole('heading', { name: /주문/ })).toBeInTheDocument()
+  })
 })

@@ -1,18 +1,39 @@
 import type {
-  AnalyzeResult, CompanyAnalysisResult, NewsItem, Snapshot, Stock, TradeResult,
+  AiRow, AnalyzeResult, CompanyAnalysisResult, NewsItem, Snapshot, Stock, TradeResult,
+  TradeRow,
 } from '../api/types'
+
+/** 기본 5명. 명단 위에서부터 앉는다 — 고수 2 와 중간 3. */
+export function sampleAi(): AiRow[] {
+  return [
+    { id: 'jung', name: '정소장', cash: 1_055_000, equity: 1_120_400, rank: 1 },
+    { id: 'han', name: '한실장', cash: 341_200, equity: 1_004_100, rank: 2 },
+    { id: 'bae', name: '배차장', cash: 998_000, equity: 998_000, rank: 3 },
+    { id: 'oh', name: '오과장', cash: 780_000, equity: 980_000, rank: 4 },
+    { id: 'moon', name: '문대리', cash: 612_000, equity: 940_500, rank: 5 },
+  ]
+}
+
+export function sampleTrades(): TradeRow[] {
+  return [
+    { seq: 1, tick: 35, actor: '강사원', symbol: 'geno', name: '제노셀',
+      side: 'buy', qty: 15, price: 32_442 },
+    { seq: 2, tick: 38, actor: '김부장', symbol: 'taesan', name: '태산건영',
+      side: 'sell', qty: 12, price: 18_510 },
+  ]
+}
 
 /**
  * 테스트용 고정값이다. 실제 시작가는 판마다 달라지므로
  * 이 숫자를 "그 종목의 시작가" 로 읽으면 안 된다.
  */
 export const SYMBOLS: Stock[] = [
-  { symbol: 'hanbit', name: '한빛솔리드', sector: '반도체', price: 82_000, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [], avg_cost: null },
-  { symbol: 'geno', name: '제노셀', sector: '바이오', price: 45_000, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [], avg_cost: null },
-  { symbol: 'sungjin', name: '성진셀즈', sector: '2차전지', price: 61_000, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [], avg_cost: null },
-  { symbol: 'pixel', name: '픽셀로그', sector: '게임', price: 33_000, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [], avg_cost: null },
-  { symbol: 'taesan', name: '태산건영', sector: '건설', price: 18_500, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [], avg_cost: null },
-  { symbol: 'arawings', name: '아라윙스', sector: '항공', price: 24_000, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [], avg_cost: null },
+  { symbol: 'hanbit', name: '한빛솔리드', sector: '반도체', price: 82_000, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [], avg_cost: null, volume: 0, volume_avg: 0 },
+  { symbol: 'geno', name: '제노셀', sector: '바이오', price: 45_000, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [], avg_cost: null, volume: 0, volume_avg: 0 },
+  { symbol: 'sungjin', name: '성진셀즈', sector: '2차전지', price: 61_000, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [], avg_cost: null, volume: 0, volume_avg: 0 },
+  { symbol: 'pixel', name: '픽셀로그', sector: '게임', price: 33_000, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [], avg_cost: null, volume: 0, volume_avg: 0 },
+  { symbol: 'taesan', name: '태산건영', sector: '건설', price: 18_500, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [], avg_cost: null, volume: 0, volume_avg: 0 },
+  { symbol: 'arawings', name: '아라윙스', sector: '항공', price: 24_000, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [], avg_cost: null, volume: 0, volume_avg: 0 },
 ]
 
 export function baseSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
@@ -33,7 +54,9 @@ export function baseSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     goal_reached: false,
     stocks: SYMBOLS.map((s) => ({ ...s })),
     news: [],
-    news_total: 20,
+    ai: sampleAi(),
+  trades: [],
+  news_total: 20,
     ...overrides,
   }
 }

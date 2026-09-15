@@ -3,7 +3,7 @@ import { ApiError } from '../api/client'
 import { getState } from '../api/endpoints'
 import { useDerivedStore } from '../store/derivedStore'
 import { useGameStore } from '../store/gameStore'
-import { maxNewsId } from '../store/merge'
+import { maxNewsId, maxTradeSeq } from '../store/merge'
 
 interface Options {
   intervalMs?: number
@@ -35,8 +35,9 @@ export function useGameLoop({ intervalMs = 500 }: Options = {}): void {
       inFlight.current = true
       const mySeq = ++seq.current
       try {
-        const since = maxNewsId(useDerivedStore.getState().feed)
-        const snap = await getState(sessionId, since)
+        const derived = useDerivedStore.getState()
+        const since = maxNewsId(derived.feed)
+        const snap = await getState(sessionId, since, maxTradeSeq(derived.trades))
         if (stopped.current) return
         useGameStore.getState().setConnected(true)
         useGameStore.getState().applySnapshot(snap, mySeq)

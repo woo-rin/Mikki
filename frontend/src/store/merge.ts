@@ -1,6 +1,6 @@
 import type {
   AnalyzeResult, CompanyAnalysisResult, GrindResult, NewsItem, Snapshot, Stock, Strength,
-  Symbol_, TradeResult,
+  Symbol_, TradeResult, TradeRow,
 } from '../api/types'
 import { publishTick as toPublishTick, rampEndTick } from '../lib/derive'
 import { unrealized } from '../lib/money'
@@ -96,6 +96,49 @@ export function attachAnalysis(
           },
         }
       : f,
+  )
+}
+
+/**
+ * 서버도 최근 500건까지만 들고 있다. 더 쌓아도 볼 수 없는 것을 들고 있을 뿐이다.
+ */
+const TRADES_MAX = 500
+
+/** 기사와 체결을 이어보는 창. 램프 길이가 비공개라 넉넉히 잡고 인과를 주장하지 않는다. */
+const NEWS_TRADE_WINDOW_TICKS = 60
+
+/** seq 기준 증분 누적. 최신이 앞에 온다. */
+export function appendTrades(prev: TradeRow[], incoming: TradeRow[]): TradeRow[] {
+  if (incoming.length === 0) return prev
+
+  const bySeq = new Map(prev.map((t) => [t.seq, t]))
+  for (const t of incoming) bySeq.set(t.seq, t)
+  return [...bySeq.values()].sort((a, b) => b.seq - a.seq).slice(0, TRADES_MAX)
+}
+
+/** trades_since 커서. 아직 하나도 받지 않았으면 -1. */
+export function maxTradeSeq(trades: TradeRow[]): number {
+  return trades.reduce((max, t) => (t.seq > max ? t.seq : max), -1)
+}
+
+/**
+ * 이 기사 **이후** 같은 종목에서 일어난 체결.
+ *
+ * 인과를 주장하지 않는다 — 램프 길이가 비공개라 정확한 창을 모른다. 다만 누가
+ * 들어갔는지는 그 자체로 단서다: 잘 낚이는 참가자만 들어간 기사는 함정일 확률이 높다.
+ * 플레이어 자신의 체결은 단서가 아니므로 뺀다.
+ */
+export function tradesForNews(
+  trades: TradeRow[],
+  symbol: Symbol_,
+  publishTick: number,
+): TradeRow[] {
+  return trades.filter(
+    (t) =>
+      t.symbol === symbol &&
+      t.actor !== 'you' &&
+      t.tick >= publishTick &&
+      t.tick <= publishTick + NEWS_TRADE_WINDOW_TICKS,
   )
 }
 

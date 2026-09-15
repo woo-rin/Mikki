@@ -29,6 +29,32 @@ export interface Stock {
   history: number[]
   /** 수수료를 포함한 취득 단가(내림). **안 들고 있으면 null** — 0 이 아니다. */
   avg_cost: number | null
+  /** 최근 60틱 체결 수량 (매수·매도 합) */
+  volume: number
+  /** 그때까지의 구간 평균. "평소의 5배" 를 이걸로 잰다. */
+  volume_avg: number
+}
+
+/** 리더보드 한 줄. **보유 종목은 오지 않는다** — 체결 피드로 재구성하는 것이 정당한 우위다. */
+export interface AiRow {
+  id: string
+  name: string
+  cash: number
+  /** 순위 기준. 동점은 명단 순서로 갈린다. */
+  equity: number
+  rank: number
+}
+
+/** 체결 한 건. 플레이어 자신의 체결은 actor 가 "you" 다. */
+export interface TradeRow {
+  seq: number
+  tick: number
+  actor: string
+  symbol: Symbol_
+  name: string
+  side: 'buy' | 'sell'
+  qty: number
+  price: number
 }
 
 export interface NewsItem {
@@ -63,6 +89,10 @@ export interface Snapshot {
   stocks: Stock[]
   news: NewsItem[]
   news_total: number
+  /** AI 리더보드 */
+  ai: AiRow[]
+  /** trades_since 로 걸러진 체결. 증분이므로 클라이언트가 누적해야 한다. */
+  trades: TradeRow[]
 }
 
 export interface TradeResult {

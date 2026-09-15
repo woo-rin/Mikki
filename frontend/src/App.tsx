@@ -1,5 +1,7 @@
 import './App.css'
 import { AccountPanel } from './components/account/AccountPanel'
+import { Leaderboard } from './components/ai/Leaderboard'
+import { TradeFeed } from './components/ai/TradeFeed'
 import { GrindPanel } from './components/account/GrindPanel'
 import { Positions } from './components/account/Positions'
 import { RoundPanel } from './components/account/RoundPanel'
@@ -21,6 +23,14 @@ import { useUiStore } from './store/uiStore'
 function TabPane({ bankrupt }: { bankrupt: boolean }) {
   const tab = useUiStore((s) => s.tab)
   if (tab === 'fundamentals') return <FundamentalsPanel />
+  if (tab === 'participants') {
+    return (
+      <>
+        <Leaderboard />
+        <TradeFeed />
+      </>
+    )
+  }
   if (tab === 'positions') {
     return (
       <>

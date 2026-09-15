@@ -48,4 +48,40 @@ describe('티커 바', () => {
     const { container } = render(<TickerBar />)
     expect(container).toBeEmptyDOMElement()
   })
+
+  it('거래량이 평소보다 튀면 배수로 알려준다', () => {
+    const snap = baseSnapshot()
+    useGameStore.getState().applySnapshot(
+      {
+        ...snap,
+        stocks: snap.stocks.map((s) =>
+          s.symbol === 'geno' ? { ...s, volume: 340, volume_avg: 62 } : s,
+        ),
+      },
+      1,
+    )
+    render(<TickerBar />)
+    expect(screen.getByRole('button', { name: /제노셀/ })).toHaveTextContent('5.5배')
+  })
+
+  it('평소 수준이면 배수를 띄우지 않는다 — 노이즈가 된다', () => {
+    const snap = baseSnapshot()
+    useGameStore.getState().applySnapshot(
+      {
+        ...snap,
+        stocks: snap.stocks.map((s) =>
+          s.symbol === 'geno' ? { ...s, volume: 70, volume_avg: 62 } : s,
+        ),
+      },
+      1,
+    )
+    render(<TickerBar />)
+    expect(screen.getByRole('button', { name: /제노셀/ })).not.toHaveTextContent('배')
+  })
+
+  it('거래가 없던 종목에서 0 으로 나누지 않는다', () => {
+    useGameStore.getState().applySnapshot(baseSnapshot(), 1)
+    render(<TickerBar />)
+    expect(screen.getByRole('button', { name: /제노셀/ })).not.toHaveTextContent('Infinity')
+  })
 })

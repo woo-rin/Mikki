@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   baseSnapshot, capturedAnalyze, capturedCompanyAnalysis, capturedTrade, sampleNews,
 } from '../mocks/fixtures'
+import type { Symbol_, TradeRow } from '../api/types'
 import {
+  appendTrades, maxTradeSeq, tradesForNews,
   applyCompanyAnalysisToSnapshot, applyGrindToSnapshot, applyTradeToSnapshot,
   attachAnalysis, isFresher, maxNewsId, positionRows, priceSeries, upsertNews,
 } from './merge'
@@ -11,7 +13,7 @@ describe('가격 이력 — 서버가 준 배열에 tick 좌표를 입힌다', (
   const stock = (history: number[], price: number) => ({
     symbol: 'hanbit' as const, name: '한빛솔리드', sector: '반도체',
     price, change_pct: 0, held: 0, fundamentals_analyzed: false,
-    avg_cost: null, history,
+    avg_cost: null, history, volume: 0, volume_avg: 0,
   })
 
   it('마지막 값이 현재 tick 이다', () => {
@@ -182,5 +184,67 @@ describe('기업분석 반영', () => {
     const once = applyCompanyAnalysisToSnapshot(baseSnapshot(), capturedCompanyAnalysis)
     const twice = applyCompanyAnalysisToSnapshot(once, capturedCompanyAnalysis)
     expect(twice.company_analyses_left).toBe(1)
+  })
+})
+
+// ------------------------------------------------------------ 체결 피드
+
+function trade(seq: number, patch: Partial<TradeRow> = {}): TradeRow {
+  return {
+    seq, tick: seq * 10, actor: '김부장', symbol: 'geno', name: '제노셀',
+    side: 'buy', qty: 10, price: 40_000, ...patch,
+  }
+}
+
+describe('체결 누적', () => {
+  it('아직 하나도 없으면 커서는 -1 이다', () => {
+    expect(maxTradeSeq([])).toBe(-1)
+  })
+
+  it('최신 체결이 앞에 온다', () => {
+    const rows = appendTrades([], [trade(1), trade(2), trade(3)])
+    expect(rows.map((t) => t.seq)).toEqual([3, 2, 1])
+  })
+
+  it('같은 seq 가 두 번 와도 한 번만 남는다', () => {
+    const once = appendTrades([], [trade(1), trade(2)])
+    const twice = appendTrades(once, [trade(2), trade(3)])
+    expect(twice.map((t) => t.seq)).toEqual([3, 2, 1])
+  })
+
+  it('커서는 받은 것 중 최대 seq 다', () => {
+    expect(maxTradeSeq(appendTrades([], [trade(4), trade(9), trade(7)]))).toBe(9)
+  })
+
+  it('무한히 쌓이지 않는다 — 서버도 500건까지만 준다', () => {
+    const many = Array.from({ length: 700 }, (_, i) => trade(i + 1))
+    expect(appendTrades([], many).length).toBeLessThanOrEqual(500)
+  })
+})
+
+describe('기사에 반응한 체결', () => {
+  const feedItem = { newsId: 1, symbol: 'geno' as Symbol_, publishTick: 100 }
+
+  it('같은 종목의, 기사 이후 체결만 고른다', () => {
+    const rows = [
+      trade(1, { symbol: 'geno', tick: 90 }),    // 기사 전 — 제외
+      trade(2, { symbol: 'geno', tick: 110 }),   // 포함
+      trade(3, { symbol: 'hanbit', tick: 110 }), // 다른 종목 — 제외
+    ]
+    const hits = tradesForNews(rows, feedItem.symbol, feedItem.publishTick)
+    expect(hits.map((t) => t.seq)).toEqual([2])
+  })
+
+  it('너무 늦은 체결은 기사와 무관하다고 본다', () => {
+    const rows = [trade(9, { symbol: 'geno', tick: 100 + 999 })]
+    expect(tradesForNews(rows, 'geno', 100)).toEqual([])
+  })
+
+  it('플레이어 자신의 체결은 단서가 아니다 — 뺀다', () => {
+    const rows = [
+      trade(1, { actor: 'you', tick: 110 }),
+      trade(2, { actor: '김부장', tick: 110 }),
+    ]
+    expect(tradesForNews(rows, 'geno', 100).map((t) => t.actor)).toEqual(['김부장'])
   })
 })

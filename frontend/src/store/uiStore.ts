@@ -8,7 +8,7 @@ export interface Toast {
 }
 
 /** 좌측에서 한 번에 하나만 본다. 급한 것(파산·라운드)은 여기 들어가지 않는다. */
-export type Tab = 'news' | 'fundamentals' | 'positions'
+export type Tab = 'news' | 'fundamentals' | 'participants' | 'positions'
 
 interface UiState {
   selected: Symbol_

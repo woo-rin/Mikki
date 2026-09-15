@@ -4,6 +4,7 @@ import { analyze } from '../../api/endpoints'
 import type { Strength } from '../../api/types'
 import { ageAt, rampRemainingAt } from '../../lib/derive'
 import { useDerivedStore } from '../../store/derivedStore'
+import { tradesForNews } from '../../store/merge'
 import { useGameStore } from '../../store/gameStore'
 import type { FeedItem } from '../../store/merge'
 import { useUiStore } from '../../store/uiStore'
@@ -19,10 +20,14 @@ export function NewsCard({ item, tick }: { item: FeedItem; tick: number }) {
   const sessionId = useGameStore((s) => s.sessionId)
   const analysesLeft = useGameStore((s) => s.snapshot?.analyses_left ?? 0)
   const pushToast = useUiStore((s) => s.pushToast)
+  const trades = useDerivedStore((s) => s.trades)
   const [busy, setBusy] = useState(false)
 
   const age = ageAt(tick, item.publishTick)
   const a = item.analysis
+  // 누가 들어갔는지가 그 자체로 단서다 — 잘 낚이는 참가자만 들어간 기사는
+  // 함정일 확률이 높다. 인과를 주장하지는 않는다 (램프 길이가 비공개다).
+  const reactions = tradesForNews(trades, item.symbol, item.publishTick)
 
   async function run(): Promise<void> {
     if (!sessionId) return
@@ -50,6 +55,17 @@ export function NewsCard({ item, tick }: { item: FeedItem; tick: number }) {
 
       <h3>{item.headline}</h3>
       <p className="news-body">{item.body}</p>
+
+      {reactions.length > 0 && (
+        <p className="reactions">
+          <span className="reactions-key">기사 이후</span>
+          {reactions.map((t) => (
+            <span key={t.seq} className="reaction">
+              {`${t.actor} ${t.side === 'buy' ? '매수' : '매도'} ${t.qty}`}
+            </span>
+          ))}
+        </p>
+      )}
 
       {a === null ? (
         <div className="news-foot">

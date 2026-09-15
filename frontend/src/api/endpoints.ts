@@ -7,9 +7,20 @@ export function newGame(): Promise<Snapshot> {
   return postJson<Snapshot>('/api/game', {})
 }
 
-/** since 보다 큰 news_id 만 받는다. 아직 하나도 없으면 -1. */
-export function getState(sessionId: string, since: number): Promise<Snapshot> {
-  const q = new URLSearchParams({ session_id: sessionId, since: String(since) })
+/**
+ * since 보다 큰 news_id, tradesSince 보다 큰 체결 seq 만 받는다. 아직 없으면 -1.
+ * 둘 다 증분이므로 클라이언트가 누적한다.
+ */
+export function getState(
+  sessionId: string,
+  since: number,
+  tradesSince = -1,
+): Promise<Snapshot> {
+  const q = new URLSearchParams({
+    session_id: sessionId,
+    since: String(since),
+    trades_since: String(tradesSince),
+  })
   return getJson<Snapshot>(`/api/state?${q}`)
 }
 
