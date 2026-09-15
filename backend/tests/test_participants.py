@@ -120,3 +120,90 @@ def test_exaggerated_news_fools_even_a_seer():
     weak = plan(impact=0.004, tone="positive")
     assert participants.view_of(weak, sees=True) == "bullish"
     assert participants.view_of(weak, sees=False) == "bullish"
+
+
+# ------------------------------------------------------------------ 매매
+
+def _ai(cash=config.SEED_CASH, **kwargs):
+    return participants.AIState(profile=profile(**kwargs), cash=cash)
+
+
+def test_buy_spends_the_bet_ratio_and_pays_the_fee():
+    ai = _ai(bet=0.30)
+    fill = participants.buy(ai, "geno", 40_000)
+
+    assert fill["side"] == "buy" and fill["symbol"] == "geno"
+    assert fill["qty"] == 7                      # 30만 // 4만
+    assert fill["value"] == 7 * 40_000
+    # 플레이어와 같은 규칙 — 양방향 0.2%
+    assert ai.cash == config.SEED_CASH - 280_000 - 560
+
+
+def test_buy_records_cost_including_fee():
+    """평단에 수수료가 빠지면 익절선이 실제보다 일찍 걸린다."""
+    ai = _ai(bet=0.30)
+    participants.buy(ai, "geno", 40_000)
+    assert ai.holdings["geno"] == (7, 280_000 + 560)
+
+
+def test_buying_twice_accumulates_quantity_and_cost():
+    ai = _ai(bet=0.30)
+    participants.buy(ai, "geno", 40_000)
+    participants.buy(ai, "geno", 50_000)
+    qty, cost = ai.holdings["geno"]
+    assert qty > 7 and cost > 280_560
+
+
+def test_buy_returns_none_when_it_cannot_afford_one_share():
+    ai = _ai(cash=1_000, bet=0.30)
+    assert participants.buy(ai, "geno", 40_000) is None
+    assert ai.holdings == {}
+    assert ai.cash == 1_000
+
+
+def test_sell_all_clears_the_position_and_pays_the_fee():
+    ai = _ai(bet=0.30)
+    participants.buy(ai, "geno", 40_000)
+    cash_after_buy = ai.cash
+
+    fill = participants.sell_all(ai, "geno", 50_000)
+
+    assert fill["side"] == "sell" and fill["qty"] == 7
+    assert fill["value"] == -7 * 50_000
+    assert "geno" not in ai.holdings
+    assert ai.cash == cash_after_buy + 350_000 - 700
+
+
+def test_sell_all_on_nothing_is_none():
+    assert participants.sell_all(_ai(), "geno", 40_000) is None
+
+
+def test_take_profit_triggers_above_the_line():
+    ai = _ai(bet=0.30, take=0.15)
+    participants.buy(ai, "geno", 40_000)
+    assert participants.should_take_profit(ai, "geno", 44_000) is False   # +10%
+    assert participants.should_take_profit(ai, "geno", 47_000) is True    # +17%
+
+
+def test_take_profit_is_measured_against_cost_not_price():
+    """수수료 때문에 매입원가는 체결가보다 높다. 평단 기준이어야 정확하다."""
+    ai = _ai(bet=0.30, take=0.0001)
+    participants.buy(ai, "geno", 40_000)
+    assert participants.should_take_profit(ai, "geno", 40_000) is False
+
+
+def test_take_profit_on_nothing_is_false():
+    assert participants.should_take_profit(_ai(), "geno", 40_000) is False
+
+
+def test_equity_counts_cash_and_holdings():
+    ai = _ai(bet=0.30)
+    participants.buy(ai, "geno", 40_000)
+    assert participants.equity_of(ai, lambda s: 40_000) == ai.cash + 7 * 40_000
+
+
+def test_a_broke_ai_simply_stops():
+    """노가다는 플레이어 전용 구제 장치다. AI 는 조용히 멈춘다."""
+    ai = _ai(cash=0, bet=0.50)
+    assert participants.buy(ai, "geno", 40_000) is None
+    assert not hasattr(participants, "start_grind")
