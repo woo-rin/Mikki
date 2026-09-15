@@ -662,3 +662,98 @@ def test_snapshot_has_no_round_start_equity(client):
     assert "round_start_equity" not in body
     # round_no 는 프론트 호환을 위해 1 로 남는다. 프론트 전환 때 지운다.
     assert body["round_no"] == 1
+
+
+# ------------------------------------------------------------ 경주 종료
+
+def _win(client, sid):
+    """플레이어를 목표에 올려놓고 한 번 폴링해 종료를 일으킨다."""
+    sessions[sid].cash = sessions[sid].target
+    return state(client, sid)
+
+
+def test_a_fresh_game_is_running(client):
+    body = start(client)
+    assert body["status"] == "running"
+    assert body["ranking"] is None
+    assert body["winner"] is None
+
+
+def test_reaching_the_target_finishes_the_game(client):
+    sid = start(client, ELAPSED)["session_id"]
+    body = _win(client, sid)
+
+    assert body["status"] == "finished"
+    assert body["winner"] == "you"
+    assert len(body["ranking"]) == config.AI_COUNT_DEFAULT + 1
+    assert body["ranking"][0]["is_player"] is True
+
+
+def test_an_ai_reaching_the_target_finishes_the_game(client):
+    sid = start(client, ELAPSED)["session_id"]
+    sessions[sid].ais[0].cash = sessions[sid].target
+    body = state(client, sid)
+
+    assert body["status"] == "finished"
+    assert body["winner"] == sessions[sid].ais[0].profile.name
+    assert body["ranking"][0]["is_player"] is False
+
+
+def test_holdings_are_liquidated_on_finish(client):
+    sid = start(client, ELAPSED)["session_id"]
+    client.post("/api/trade", json={"session_id": sid, "symbol": "geno",
+                                    "side": "buy", "qty": 2})
+    _win(client, sid)
+
+    assert sessions[sid].holdings == {}
+    assert all(not ai.holdings for ai in sessions[sid].ais)
+
+
+@pytest.mark.parametrize(
+    "path,payload",
+    [
+        ("/api/trade", {"symbol": "geno", "side": "buy", "qty": 1}),
+        ("/api/analyze", {"news_id": 0}),
+        ("/api/company-analysis", {"symbol": "geno"}),
+        ("/api/grind", {}),
+    ],
+)
+def test_a_finished_game_rejects_everything(client, path, payload):
+    sid = start(client, ELAPSED)["session_id"]
+    _win(client, sid)
+
+    response = client.post(path, json={"session_id": sid, **payload})
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "game_finished"
+
+
+def test_a_finished_game_still_serves_state(client):
+    """결과를 봐야 한다."""
+    sid = start(client, ELAPSED)["session_id"]
+    _win(client, sid)
+    assert state(client, sid)["status"] == "finished"
+
+
+def test_catching_up_ends_where_polling_would(client):
+    """**이 작업에서 가장 깨지기 쉬운 성질이다.**
+
+    탭을 비웠다 돌아온 요청이 폴링과 같은 지점에서 끝나야 한다. 뒤에서 한 번만
+    검사하면 따라잡기가 경주를 지나쳐 계속 굴러가고 승자가 달라진다.
+    """
+    sid = start(client, ELAPSED)["session_id"]
+    sess = sessions[sid]
+    sess.ais[0].cash = sess.target
+
+    sess.started_at -= 1800
+    body = state(client, sid)
+
+    assert body["status"] == "finished"
+    assert body["tick"] < 1800
+
+
+def test_time_stops_when_the_game_ends(client):
+    sid = start(client, ELAPSED)["session_id"]
+    frozen = _win(client, sid)["tick"]
+
+    sessions[sid].started_at -= 60
+    assert state(client, sid)["tick"] == frozen

@@ -463,3 +463,18 @@ def test_all_four_forces_coexist():
     assert price_of(state, "geno") > 10_000 * (1 + config.FLOW_MAX)
     assert state.flow_log["geno"] > 0
     assert state.anchor_log["geno"] - state.log_return["geno"] < 0
+
+
+def test_should_stop_halts_at_that_tick():
+    """따라잡기가 폴링과 같은 지점에서 끝나야 한다."""
+    state = _state()
+    advance(state, [], to_tick=100, rng=random.Random(1),
+            should_stop=lambda: len(state.history["geno"]) >= 7)
+    assert len(state.history["geno"]) == 7
+    assert state.last_tick == 7
+
+
+def test_no_should_stop_runs_the_whole_span():
+    state = _state()
+    advance(state, [], to_tick=30, rng=random.Random(1))
+    assert state.last_tick == 30

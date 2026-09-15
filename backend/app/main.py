@@ -97,6 +97,13 @@ def _fail(error: TradeError) -> HTTPException:
     return HTTPException(status, {"code": error.code, "message": error.message})
 
 
+def _check_running(sess: GameSession) -> None:
+    if sess.status == "finished":
+        raise HTTPException(
+            400, {"code": "game_finished", "message": "경주가 끝났습니다."}
+        )
+
+
 def _tick_of(sess: GameSession, now: float) -> int:
     """5의 배수로 끊은 tick. 시세는 이 주기로만 앞으로 간다.
 
@@ -114,6 +121,10 @@ def _sync(sess: GameSession, now: float) -> int:
     AI 매매는 tick 루프 안에서 돈다 — 매수가 그 tick 의 가격을 밀고, 그것이
     다음 tick 의 AI 판단에 들어간다. engine 은 순주문액만 받는다.
     """
+    # 끝난 경주는 더 이상 흐르지 않는다. 결과가 폴링할 때마다 바뀌면 안 된다.
+    if sess.status == "finished":
+        return sess.prices.last_tick
+
     tick = _tick_of(sess, now)
 
     def on_tick(at: int) -> dict[str, int]:
@@ -123,10 +134,21 @@ def _sync(sess: GameSession, now: float) -> int:
             lambda actor, fill: rules.record_fill(sess, at, actor, fill),
         )
 
-    engine.advance(sess.prices, sess.plans, tick, sess.rng, on_tick=on_tick)
-    rules.prune_volume(sess, tick)
+    # AI 의 매도가 목표를 넘기는 순간이 tick 루프 안이다. 매 tick 본다 —
+    # 뒤에서 한 번만 보면 따라잡기가 폴링보다 멀리 가서 승자가 달라진다.
+    engine.advance(
+        sess.prices, sess.plans, tick, sess.rng,
+        on_tick=on_tick,
+        should_stop=lambda: rules.winner_of(sess) is not None,
+    )
+    reached = sess.prices.last_tick
+    rules.prune_volume(sess, reached)
     rules.settle_grind(sess, now)
-    return tick
+
+    champion = rules.winner_of(sess)
+    if champion is not None:
+        rules.finish_race(sess, champion)
+    return reached
 
 
 def _stock_rows(sess: GameSession, tick: int) -> list[dict]:
@@ -200,6 +222,9 @@ def _snapshot(
         "lock_remaining": rules.lock_remaining(sess, now),
         "grind_count": sess.grind_count,
         "goal_reached": rules.goal_reached(sess),
+        "status": sess.status,
+        "ranking": sess.ranking,
+        "winner": sess.winner,
         "stocks": _stock_rows(sess, tick),
         "news": _news_rows(sess, tick, since),
         "news_total": len(sess.news),
@@ -331,6 +356,7 @@ async def trade(body: TradeBody) -> dict:
     async with _lock(body.session_id):
         now = time.monotonic()
         _sync(sess, now)
+        _check_running(sess)
         action = rules.buy if body.side == "buy" else rules.sell
         try:
             result = action(sess, body.symbol, body.qty, now)
@@ -358,6 +384,7 @@ async def analyze(body: AnalyzeBody) -> dict:
     async with _lock(body.session_id):
         now = time.monotonic()
         tick = _sync(sess, now)
+        _check_running(sess)
         item = next(
             (i for i in sess.news if i.plan.news_id == body.news_id), None
         )
@@ -401,6 +428,7 @@ async def company_analyze(body: CompanyAnalyzeBody) -> dict:
     async with _lock(body.session_id):
         now = time.monotonic()
         _sync(sess, now)
+        _check_running(sess)
         try:
             rules.spend_company_analysis(sess, body.symbol, now)
         except TradeError as error:
@@ -457,6 +485,7 @@ async def grind(body: SessionBody) -> dict:
     async with _lock(body.session_id):
         now = time.monotonic()
         _sync(sess, now)
+        _check_running(sess)
         try:
             info = rules.start_grind(sess, now)
         except TradeError as error:

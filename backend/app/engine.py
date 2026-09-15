@@ -81,11 +81,15 @@ def advance(
     to_tick: int,
     rng: random.Random,
     on_tick: Callable[[int], dict[str, int]] | None = None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> None:
     """state 를 to_tick 까지 진행한다. to_tick 이 과거면 아무것도 하지 않는다.
 
     on_tick 은 그 tick 의 종목별 순매수액(원)을 돌려준다. engine 은 누가 왜
     샀는지 모른다 — 매매 규칙은 participants 가 소유한다.
+
+    should_stop 이 참을 돌려주면 그 tick 에서 멈춘다. 따라잡기가 폴링과 같은
+    지점에서 끝나야 한다 — 아니면 탭을 비운 사람과 안 비운 사람의 승자가 달라진다.
     """
     if to_tick <= state.last_tick:
         return
@@ -124,6 +128,9 @@ def advance(
         # 이력은 전부 반영된 뒤에 찍는다. 순서가 바뀌면 차트가 한 tick 뒤처진다.
         for symbol in config.STOCKS:
             state.history[symbol].append(price_of(state, symbol))
+        if should_stop is not None and should_stop():
+            state.last_tick = tick
+            return
     state.last_tick = max(state.last_tick, to_tick)
 
 
