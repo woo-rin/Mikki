@@ -4,9 +4,10 @@
 """
 import math
 import random
+from collections import deque
 from dataclasses import dataclass, field
 
-from app import config, engine, fundamentals
+from app import config, engine, fundamentals, participants
 from app.engine import PriceState
 from app.models import NewsItem, NewsPlan
 
@@ -38,11 +39,23 @@ class GameSession:
     grind_count: int = 0
     grind_until: float | None = None
     pending_payout: int = 0
+    ais: list[participants.AIState] = field(default_factory=list)
+    ai_seed: int = 0
+    trades: list[dict] = field(default_factory=list)
+    trade_seq: int = 0
+    # (tick, symbol, qty). 오래된 것은 prune_volume 이 버린다.
+    volume_window: deque = field(default_factory=deque)
+    volume_total: dict[str, int] = field(default_factory=dict)
     plans: list[NewsPlan] = field(default_factory=list)
     news: list[NewsItem] = field(default_factory=list)
 
 
-def new_session(session_id: str, rng: random.Random, started_at: float) -> GameSession:
+def new_session(
+    session_id: str,
+    rng: random.Random,
+    started_at: float,
+    ai_count: int = config.AI_COUNT_DEFAULT,
+) -> GameSession:
     return GameSession(
         session_id=session_id,
         rng=rng,
@@ -51,6 +64,10 @@ def new_session(session_id: str, rng: random.Random, started_at: float) -> GameS
         cash=config.SEED_CASH,
         round_start_equity=config.SEED_CASH,
         target=config.SEED_CASH * config.ROUND_TARGET_MULTIPLIER,
+        ais=participants.new_participants(ai_count),
+        # AI 판단용 시드. engine 의 rng 와 섞지 않는다.
+        ai_seed=rng.randrange(2**31),
+        volume_total={symbol: 0 for symbol in config.STOCKS},
     )
 
 
@@ -241,3 +258,67 @@ def advance_round(sess: GameSession) -> None:
     # 새 분기 실적이 적정가를 옮긴다. 지난 라운드에 산 정보가 낡는다.
     # 가격은 건드리지 않는다 — 점프하면 보유 종목 평가액이 순간이동한다.
     engine.reanchor(sess.prices, fundamentals.fair_values(sess.round_no))
+
+
+# --------------------------------------------------- 체결 피드와 거래량
+
+def record_fill(sess: GameSession, tick: int, actor: str, fill: dict) -> None:
+    """체결 하나를 피드와 거래량 창에 남긴다.
+
+    fill 의 value 는 가격 영향 계산용 내부 값이라 피드에 싣지 않는다.
+    """
+    sess.trade_seq += 1
+    sess.trades.append({
+        "seq": sess.trade_seq,
+        "tick": tick,
+        "actor": actor,
+        "symbol": fill["symbol"],
+        "name": config.STOCKS[fill["symbol"]].name,
+        "side": fill["side"],
+        "qty": fill["qty"],
+        "price": fill["price"],
+    })
+    sess.volume_window.append((tick, fill["symbol"], fill["qty"]))
+    sess.volume_total[fill["symbol"]] += fill["qty"]
+
+
+def prune_volume(sess: GameSession, tick: int) -> None:
+    cutoff = tick - config.VOLUME_WINDOW_TICKS
+    while sess.volume_window and sess.volume_window[0][0] < cutoff:
+        sess.volume_window.popleft()
+
+
+def volume_of(sess: GameSession, symbol: str) -> int:
+    return sum(qty for _, sym, qty in sess.volume_window if sym == symbol)
+
+
+def volume_avg_of(sess: GameSession, symbol: str, tick: int) -> int:
+    """그때까지의 구간 평균. 프론트가 "평소의 5배" 를 계산하는 기준이다."""
+    window = config.VOLUME_WINDOW_TICKS
+    return round(sess.volume_total[symbol] * window / max(tick, window))
+
+
+def ai_rows(sess: GameSession) -> list[dict]:
+    """리더보드. 보유 종목은 싣지 않는다 — 체결 피드로 재구성하는 것이 정당한 우위다.
+
+    순위는 총자산 기준이다. 목표 판정이 현금으로 바뀌는 것은 D 와 함께 온다.
+    동점은 명단 순서로 가른다 — 임의로 흔들리면 매 폴링마다 리더보드가 요동친다.
+    """
+    def price(symbol: str) -> int:
+        return engine.price_of(sess.prices, symbol)
+
+    scored = [
+        (index, ai, participants.equity_of(ai, price))
+        for index, ai in enumerate(sess.ais)
+    ]
+    scored.sort(key=lambda row: (-row[2], row[0]))
+    return [
+        {
+            "id": ai.profile.id,
+            "name": ai.profile.name,
+            "cash": ai.cash,
+            "equity": total,
+            "rank": rank,
+        }
+        for rank, (_, ai, total) in enumerate(scored, start=1)
+    ]

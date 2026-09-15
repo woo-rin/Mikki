@@ -110,3 +110,49 @@ def equity_of(ai: AIState, price_of) -> int:
     return ai.cash + sum(
         price_of(symbol) * qty for symbol, (qty, _) in ai.holdings.items()
     )
+
+
+def run_tick(
+    ais: list[AIState],
+    plans: list[NewsPlan],
+    tick: int,
+    ai_seed: int,
+    price_of,
+    record,
+) -> dict[str, int]:
+    """이 tick 의 AI 매매를 돌리고 종목별 순주문액(원)을 돌려준다.
+
+    price_of(symbol) -> int, record(actor: str, fill: dict) -> None.
+
+    cursor 로 plans 를 AI 마다 한 번만 통과한다. 매 tick 전체를 훑으면
+    따라잡기 비용이 기사 수 × AI 수 × tick 수로 커진다.
+    """
+    flow: dict[str, int] = {}
+
+    def _apply(ai: AIState, fill: dict | None) -> None:
+        if fill is None:
+            return
+        flow[fill["symbol"]] = flow.get(fill["symbol"], 0) + fill["value"]
+        record(ai.profile.name, fill)
+
+    for index, ai in enumerate(ais):
+        # 1) 반응할 차례가 된 기사들
+        while ai.cursor < len(plans):
+            plan = plans[ai.cursor]
+            if plan.publish_tick + ai.profile.reaction_ticks > tick:
+                break
+            ai.cursor += 1
+            price = price_of(plan.symbol)
+            sees = sees_through(ai_seed, index, ai.profile, plan.news_id)
+            if view_of(plan, sees) == "bullish":
+                _apply(ai, buy(ai, plan.symbol, price))
+            else:
+                _apply(ai, sell_all(ai, plan.symbol, price))
+
+        # 2) 익절
+        for symbol in list(ai.holdings):
+            price = price_of(symbol)
+            if should_take_profit(ai, symbol, price):
+                _apply(ai, sell_all(ai, symbol, price))
+
+    return flow

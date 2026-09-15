@@ -106,6 +106,9 @@ FLOW_DECAY = 0.15
 # 명단과 무관하게 깨지지 않는다.
 FLOW_MAX = 0.03
 
+# 거래량 집계 구간. 짧으면 튀고 길면 둔하다.
+VOLUME_WINDOW_TICKS = 60
+
 GRIND_LOCK_SECONDS = 120
 GRIND_BASE_PAYOUT = 200_000
 # 0.6 을 3/5 로 둔다. 200_000 * 0.6 ** 3 은 43199.99... 가 되어 4회차 보수가

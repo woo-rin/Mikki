@@ -3,10 +3,12 @@ import random
 
 import pytest
 
-from app import config, engine, fundamentals
+from app import config, engine, fundamentals, participants
+from app.models import NewsPlan
 from app.session import (
     TradeError,
     advance_round,
+    ai_rows,
     buy,
     equity,
     goal_reached,
@@ -15,10 +17,14 @@ from app.session import (
     is_locked,
     lock_remaining,
     new_session,
+    prune_volume,
+    record_fill,
     settle_grind,
     spend_analysis,
     spend_company_analysis,
     start_grind,
+    volume_avg_of,
+    volume_of,
 )
 
 
@@ -320,3 +326,185 @@ def test_advance_round_does_not_move_prices():
     advance_round(sess)
 
     assert {s: engine.price_of(sess.prices, s) for s in config.STOCKS} == before
+
+
+# ------------------------------------------------------- 체결 피드와 AI
+
+def test_new_session_seats_the_default_count():
+    sess = fresh()
+    assert len(sess.ais) == config.AI_COUNT_DEFAULT
+    assert sess.trades == []
+    assert sess.trade_seq == 0
+
+
+def test_record_fill_numbers_trades_from_one():
+    sess = fresh()
+    record_fill(sess, 10, "you", {"side": "buy", "symbol": "geno", "qty": 3,
+                                  "price": 40_000, "value": 120_000})
+    assert sess.trades[0]["seq"] == 1
+    assert sess.trades[0]["actor"] == "you"
+    assert sess.trades[0]["name"] == config.STOCKS["geno"].name
+    assert sess.trades[0]["tick"] == 10
+
+
+def test_recorded_trades_never_carry_value():
+    """value 는 가격 영향 계산용 내부 값이다. 밖으로 나가면 안 된다."""
+    sess = fresh()
+    record_fill(sess, 1, "you", {"side": "buy", "symbol": "geno", "qty": 3,
+                                 "price": 40_000, "value": 120_000})
+    assert "value" not in sess.trades[0]
+
+
+def test_volume_window_drops_old_fills():
+    sess = fresh()
+    record_fill(sess, 1, "you", {"side": "buy", "symbol": "geno",
+                                 "qty": 10, "price": 1, "value": 10})
+    record_fill(sess, 90, "you", {"side": "buy", "symbol": "geno",
+                                  "qty": 5, "price": 1, "value": 5})
+    prune_volume(sess, 90)
+    assert volume_of(sess, "geno") == 5
+
+
+def test_volume_counts_both_sides():
+    sess = fresh()
+    record_fill(sess, 1, "you", {"side": "buy", "symbol": "geno",
+                                 "qty": 10, "price": 1, "value": 10})
+    record_fill(sess, 2, "kim", {"side": "sell", "symbol": "geno",
+                                 "qty": 4, "price": 1, "value": -4})
+    assert volume_of(sess, "geno") == 14
+
+
+def test_volume_avg_is_zero_before_any_trade():
+    assert volume_avg_of(fresh(), "geno", tick=300) == 0
+
+
+def test_ai_rows_rank_by_equity_descending():
+    sess = fresh()
+    for index, ai in enumerate(sess.ais):
+        ai.cash = 1_000_000 + index * 10_000
+    rows = ai_rows(sess)
+    assert [r["rank"] for r in rows] == list(range(1, len(sess.ais) + 1))
+    assert rows[0]["cash"] > rows[-1]["cash"]
+
+
+def test_ai_rows_break_ties_by_roster_order():
+    """임의로 흔들리면 리더보드가 매 폴링마다 요동친다."""
+    sess = fresh()
+    for ai in sess.ais:
+        ai.cash = 1_000_000
+    first = [r["id"] for r in ai_rows(sess)]
+    assert first == [r["id"] for r in ai_rows(sess)]
+    assert first == [a.profile.id for a in sess.ais]
+
+
+def test_ai_rows_never_expose_holdings():
+    for row in ai_rows(fresh()):
+        assert set(row) == {"id", "name", "cash", "equity", "rank"}
+
+
+# ------------------------------------------------------- AI 의 tick 구동
+
+def _drive(sess, plans, ticks, seed=7):
+    """AI 를 ticks 까지 굴리고 tick 별 순주문액을 모은다."""
+    flows = []
+    for tick in range(1, ticks + 1):
+        flows.append(participants.run_tick(
+            sess.ais, plans, tick, seed,
+            lambda s: 40_000,
+            lambda actor, fill, t=tick: record_fill(sess, t, actor, fill),
+        ))
+    return flows
+
+
+def test_ai_reacts_exactly_at_its_reaction_tick():
+    sess = fresh()
+    sess.ais = participants.new_participants(1)          # 정소장, 반응 3t
+    p = NewsPlan(news_id=0, symbol="geno", surface_tone="positive",
+                 kind="honest", impact=0.10, ramp_seconds=20, publish_tick=5)
+
+    flows = _drive(sess, [p], 12)
+
+    assert [tick for tick, flow in enumerate(flows, start=1) if flow] == [8]
+
+
+def test_ai_reacts_to_each_news_only_once():
+    sess = fresh()
+    sess.ais = participants.new_participants(1)
+    p = NewsPlan(news_id=0, symbol="geno", surface_tone="positive",
+                 kind="honest", impact=0.10, ramp_seconds=20, publish_tick=0)
+
+    _drive(sess, [p], 40)
+    assert len([t for t in sess.trades if t["side"] == "buy"]) == 1
+
+
+def test_a_fooled_ai_buys_into_a_reversed_trap():
+    sess = fresh()
+    sess.ais = participants.new_participants(9)
+    trap = NewsPlan(news_id=0, symbol="geno", surface_tone="positive",
+                    kind="reversed", impact=-0.10, ramp_seconds=20,
+                    publish_tick=0)
+
+    _drive(sess, [trap], 20)
+    buyers = {t["actor"] for t in sess.trades if t["side"] == "buy"}
+    assert buyers, "아무도 안 낚이면 함정이 성립하지 않는다"
+    assert len(buyers) < 9, "전원이 낚이면 신원을 읽을 수 없다"
+
+
+def test_flow_value_sign_matches_the_side():
+    sess = fresh()
+    sess.ais = participants.new_participants(1)
+    p = NewsPlan(news_id=0, symbol="geno", surface_tone="positive",
+                 kind="honest", impact=0.10, ramp_seconds=20, publish_tick=0)
+    assert any(flow.get("geno", 0) > 0 for flow in _drive(sess, [p], 6))
+
+
+def test_same_seed_replays_the_same_trades():
+    """재현이 안 되면 밸런스를 못 고친다."""
+    def run():
+        sess = new_session("s", random.Random(0), started_at=0.0)
+        p = NewsPlan(news_id=0, symbol="geno", surface_tone="positive",
+                     kind="reversed", impact=-0.10, ramp_seconds=20,
+                     publish_tick=0)
+        _drive(sess, [p], 20, seed=4242)
+        return [(t["actor"], t["side"], t["qty"]) for t in sess.trades]
+
+    assert run() == run()
+
+
+def test_ai_driven_incremental_matches_bulk():
+    """**이 작업에서 가장 깨지기 쉬운 성질이다.**
+
+    탭을 비웠다 돌아온 요청(일괄)과 500ms 폴링(증분)이 같은 가격·같은
+    체결을 내야 한다. AI 판단이 engine 의 rng 를 소비하면 여기서 깨진다.
+    """
+    p = NewsPlan(news_id=0, symbol="geno", surface_tone="positive",
+                 kind="honest", impact=0.10, ramp_seconds=20, publish_tick=3)
+
+    def make():
+        sess = new_session("s", random.Random(0), started_at=0.0)
+        sess.plans.append(p)
+        return sess
+
+    def driver_for(sess):
+        def run(at):
+            return participants.run_tick(
+                sess.ais, sess.plans, at, sess.ai_seed,
+                lambda sym: engine.price_of(sess.prices, sym),
+                lambda actor, fill, t=at: record_fill(sess, t, actor, fill),
+            )
+        return run
+
+    stepwise = make()
+    rng = random.Random(77)
+    driver = driver_for(stepwise)
+    for tick in range(1, 61):
+        engine.advance(stepwise.prices, stepwise.plans, tick, rng, on_tick=driver)
+
+    at_once = make()
+    engine.advance(at_once.prices, at_once.plans, 60, random.Random(77),
+                   on_tick=driver_for(at_once))
+
+    assert stepwise.prices.log_return == at_once.prices.log_return
+    assert stepwise.prices.flow_log == at_once.prices.flow_log
+    assert [(t["seq"], t["actor"], t["side"], t["qty"]) for t in stepwise.trades] \
+        == [(t["seq"], t["actor"], t["side"], t["qty"]) for t in at_once.trades]
