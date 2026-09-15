@@ -359,15 +359,20 @@ def _liquidate_player(sess: GameSession) -> None:
     sess.cost_basis.clear()
 
 
-def finish_race(sess: GameSession, winner: str) -> None:
-    """전원 강제 매도 후 순위를 확정한다.
+def finish_race(sess: GameSession, winner: str | None) -> None:
+    """전원 강제 매도 후 순위를 확정한다. 끝나는 길이 둘이다.
 
-    승자는 **매도 전에** 정해져 있다. 그래서 승자의 최종 현금이 2위보다 적을
-    수 있다 — 목표선을 막 넘은 사람과, 주식을 잔뜩 들고 있다가 강제 매도로 큰
-    현금을 쥔 사람이 있을 때 그렇다. 의도한 것이다: 목표는 먼저 확정한 사람의
-    것이고, 그래서 익절을 미루는 데 대가가 있다.
+    **조기 종료** (`winner` 가 이름): 누가 목표를 먼저 확정했다. 승자는 **매도
+    전에** 정해져 있으므로 승자의 최종 현금이 2위보다 적을 수 있다 — 목표선을
+    막 넘은 사람과, 주식을 잔뜩 들고 있다가 강제 매도로 큰 현금을 쥔 사람이
+    있을 때다. 의도한 것이다: 목표는 먼저 확정한 사람의 것이고, 그래서 익절을
+    미루는 데 대가가 있다.
 
-    수수료도 부과한다 — 미리 팔아둔 사람이 유리해야 익절 판단에 의미가 생긴다.
+    **마감 종료** (`winner` 가 None): 아무도 목표에 못 닿았다. 전원 청산한 뒤
+    현금이 가장 많은 사람이 이긴다.
+
+    어느 쪽이든 수수료를 부과한다 — 미리 팔아둔 사람이 유리해야 익절 판단에
+    의미가 생긴다.
     """
     _liquidate_player(sess)
     for ai in sess.ais:
@@ -380,11 +385,16 @@ def finish_race(sess: GameSession, winner: str) -> None:
         for ai in sess.ais
     ]
 
-    def is_winner(row: dict) -> bool:
-        return row["is_player"] if winner == "you" else row["name"] == winner
+    if winner is None:
+        ordered = sorted(rows, key=lambda r: -r["cash"])
+        champion, rest = ordered[0], ordered[1:]
+        winner = "you" if champion["is_player"] else champion["name"]
+    else:
+        def is_winner(row: dict) -> bool:
+            return row["is_player"] if winner == "you" else row["name"] == winner
 
-    champion = next(row for row in rows if is_winner(row))
-    rest = sorted((r for r in rows if r is not champion), key=lambda r: -r["cash"])
+        champion = next(row for row in rows if is_winner(row))
+        rest = sorted((r for r in rows if r is not champion), key=lambda r: -r["cash"])
 
     sess.status = "finished"
     sess.winner = winner

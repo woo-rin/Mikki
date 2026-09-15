@@ -757,3 +757,37 @@ def test_time_stops_when_the_game_ends(client):
 
     sessions[sid].started_at -= 60
     assert state(client, sid)["tick"] == frozen
+
+
+def test_snapshot_carries_the_deadline(client):
+    body = start(client)
+    assert body["race_seconds"] == config.RACE_SECONDS
+    assert body["seconds_left"] == config.RACE_SECONDS
+
+
+def test_seconds_left_counts_down(client):
+    sid = start(client, 120)["session_id"]
+    assert state(client, sid)["seconds_left"] == config.RACE_SECONDS - 120
+
+
+def test_the_deadline_finishes_the_race(client):
+    """아무도 목표에 못 닿아도 마감이 경주를 끝낸다."""
+    sid = start(client, config.RACE_SECONDS + 30)["session_id"]
+    body = state(client, sid)
+
+    assert body["status"] == "finished"
+    assert body["winner"] is not None
+    assert body["seconds_left"] == 0
+    assert len(body["ranking"]) == config.AI_COUNT_DEFAULT + 1
+
+
+def test_the_deadline_winner_has_the_most_cash(client):
+    sid = start(client, config.RACE_SECONDS + 30)["session_id"]
+    ranking = state(client, sid)["ranking"]
+    cashes = [row["cash"] for row in ranking]
+    assert cashes == sorted(cashes, reverse=True)
+
+
+def test_time_never_runs_past_the_deadline(client):
+    sid = start(client, config.RACE_SECONDS * 3)["session_id"]
+    assert state(client, sid)["tick"] <= config.RACE_SECONDS

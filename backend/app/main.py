@@ -125,7 +125,8 @@ def _sync(sess: GameSession, now: float) -> int:
     if sess.status == "finished":
         return sess.prices.last_tick
 
-    tick = _tick_of(sess, now)
+    # 마감을 넘어서는 진행하지 않는다. 경주에는 결승선이 있다.
+    tick = min(_tick_of(sess, now), config.RACE_SECONDS)
 
     def on_tick(at: int) -> dict[str, int]:
         return participants.run_tick(
@@ -147,7 +148,9 @@ def _sync(sess: GameSession, now: float) -> int:
 
     champion = rules.winner_of(sess)
     if champion is not None:
-        rules.finish_race(sess, champion)
+        rules.finish_race(sess, champion)       # 조기 종료 — 목표를 먼저 확정했다
+    elif reached >= config.RACE_SECONDS:
+        rules.finish_race(sess, None)           # 마감 — 청산 후 현금 1위가 이긴다
     return reached
 
 
@@ -223,6 +226,8 @@ def _snapshot(
         "grind_count": sess.grind_count,
         "goal_reached": rules.goal_reached(sess),
         "status": sess.status,
+        "race_seconds": config.RACE_SECONDS,
+        "seconds_left": max(0, config.RACE_SECONDS - tick),
         "ranking": sess.ranking,
         "winner": sess.winner,
         "stocks": _stock_rows(sess, tick),

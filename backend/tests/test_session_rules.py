@@ -664,3 +664,53 @@ def test_a_locked_player_is_still_liquidated():
     finish_race(sess, "you")
 
     assert sess.holdings == {}
+
+
+# ------------------------------------------------------------ 마감 종료
+
+def test_deadline_finish_ranks_by_cash():
+    """마감에는 아무도 목표에 못 닿는다. 청산 후 현금 1위가 이긴다."""
+    sess = fresh()
+    for index, ai in enumerate(sess.ais):
+        ai.cash = 100_000 * (index + 1)
+    top = sess.ais[-1]
+    sess.cash = 50_000
+
+    finish_race(sess, None)
+
+    assert sess.status == "finished"
+    assert sess.winner == top.profile.name
+    assert sess.ranking[0]["name"] == top.profile.name
+    cashes = [row["cash"] for row in sess.ranking]
+    assert cashes == sorted(cashes, reverse=True)
+
+
+def test_deadline_finish_can_crown_the_player():
+    sess = fresh()
+    sess.cash = 9_000_000
+    finish_race(sess, None)
+    assert sess.winner == "you"
+    assert sess.ranking[0]["is_player"] is True
+
+
+def test_deadline_finish_liquidates_everyone():
+    sess = fresh()
+    buy(sess, "geno", 5, now=0.0)
+    participants.buy(sess.ais[0], "geno", engine.price_of(sess.prices, "geno"))
+
+    finish_race(sess, None)
+
+    assert sess.holdings == {}
+    assert sess.ais[0].holdings == {}
+
+
+def test_an_early_winner_still_outranks_richer_players():
+    """조기 종료는 그대로다 — 목표를 먼저 확정한 사람이 1위다."""
+    sess = fresh()
+    sess.cash = sess.target
+    sess.ais[0].cash = 9_000_000
+
+    finish_race(sess, "you")
+
+    assert sess.ranking[0]["is_player"] is True
+    assert sess.ranking[1]["cash"] > sess.ranking[0]["cash"]
