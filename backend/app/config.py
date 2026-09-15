@@ -9,6 +9,16 @@ class Stock:
     volatility: float  # tick당 로그수익 표준편차
 
 
+@dataclass(frozen=True)
+class AI:
+    id: str
+    name: str
+    insight: float         # 낚시를 꿰뚫어 볼 확률
+    reaction_ticks: int    # 기사 등장 후 몇 tick 뒤에 움직이나
+    bet_ratio: float       # 현금의 몇 %를 거나
+    take_profit: float     # 수익률 몇 %에서 파나
+
+
 STOCKS: dict[str, Stock] = {
     "hanbit":   Stock("한빛솔리드", "반도체",  0.0030),
     "geno":     Stock("제노셀",     "바이오",  0.0040),
@@ -25,6 +35,29 @@ BANKRUPTCY_THRESHOLD = 100_000
 
 ANALYSES_PER_ROUND = 5
 COMPANY_ANALYSES_PER_ROUND = 2
+
+# 피라미드(고수 2 / 중간 4 / 호구 3) 에 엇박자 둘을 섞었다.
+#
+# 한실장은 통찰력 2위인데 익절선이 60% 라 계속 옳은 종목을 사면서도 현금이
+# 안 쌓인다. 강사원은 통찰력 꼴찌인데 1 tick 만에 반응해 램프 초반을 먹는다.
+# 순위가 통찰력 순서와 어긋나야 "옳게 고르는 것과 이기는 것은 다르다" 가 나온다.
+#
+# 이름은 3차 종토방에서 계속 쓰인다. 여기서 정한 성격이 곧 그 목소리다.
+AI_ROSTER: list[AI] = [
+    AI("jung", "정소장", 0.90, 3, 0.35, 0.12),
+    AI("han",  "한실장", 0.88, 4, 0.45, 0.60),
+    AI("oh",   "오과장", 0.60, 5, 0.30, 0.15),
+    AI("bae",  "배차장", 0.55, 8, 0.25, 0.10),
+    AI("moon", "문대리", 0.50, 6, 0.40, 0.18),
+    AI("shin", "신주임", 0.45, 7, 0.20, 0.14),
+    AI("kang", "강사원", 0.25, 1, 0.50, 0.08),
+    AI("kim",  "김부장", 0.22, 9, 0.55, 0.40),
+    AI("park", "박선배", 0.20, 6, 0.60, 0.25),
+]
+
+AI_COUNT_DEFAULT = 5
+AI_COUNT_MIN = 1
+AI_COUNT_MAX = 9
 
 # 섹터 기준 배수. 실제 시장 평균에서 따왔고, 밸런스 손잡이로 쓴다.
 # PER 은 흑자 분기에, PSR 은 적자 분기에 쓰인다.
