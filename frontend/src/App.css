@@ -131,3 +131,53 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 
 /* 거래량이 튈 때만 보인다. 늘 띄우면 노이즈가 된다. */
 .tick-vol { font-size: 11px; color: var(--accent); }
+
+/* ── 노가다 잠금 오버레이 ──────────────────────────────────── */
+/* 조작을 완전히 막되 시장은 보인다 — 만질 수 없고 보이기만 한다는 것이 요점이다. */
+.grind-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--ground) 55%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.grind-card {
+  display: grid; justify-items: center; gap: var(--gap-2);
+  background: var(--surface); border: 1px solid var(--line-strong);
+  padding: var(--gap-4) calc(var(--gap-4) * 2); text-align: center;
+}
+.grind-title { margin: 0; font-size: 13px; letter-spacing: .08em; color: var(--ink-2); }
+.grind-count { margin: 0; display: flex; align-items: baseline; gap: 2px; }
+.grind-seconds { font-size: 40px; line-height: 1; }
+.grind-unit { color: var(--ink-3); font-size: 13px; }
+.grind-card .hint { margin: 0; }
+
+.worker { width: 168px; height: 140px; }
+.worker-ink { stroke: var(--ink); stroke-width: 3; stroke-linecap: round; fill: none; }
+.worker circle.worker-ink { fill: var(--ink); stroke: none; }
+.worker-tool { stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
+.worker-ground { stroke: var(--line-strong); stroke-width: 2; }
+.worker-dust { fill: var(--ink-3); opacity: 0; }
+
+/* 어깨를 축으로 팔과 도구가 함께 돈다. 들어올릴 때 느리고 내리칠 때 빠르다. */
+.worker-swing { transform-origin: 46px 40px; animation: swing 1.1s ease-in-out infinite; }
+@keyframes swing {
+  0%   { transform: rotate(-52deg); }
+  55%  { transform: rotate(-52deg); }
+  70%  { transform: rotate(14deg); }
+  80%  { transform: rotate(6deg); }
+  100% { transform: rotate(-52deg); }
+}
+/* 내리친 순간에만 흙이 튄다 */
+.worker-dust { animation: dust 1.1s ease-out infinite; }
+@keyframes dust {
+  0%, 68%  { opacity: 0; transform: translateY(0); }
+  72%      { opacity: .9; transform: translateY(0); }
+  100%     { opacity: 0; transform: translateY(-10px); }
+}
+
+/* 움직임을 줄여달라고 한 사람에게는 숫자만 남긴다. */
+@media (prefers-reduced-motion: reduce) {
+  .worker-swing, .worker-dust { animation: none; }
+  .worker-swing { transform: rotate(-20deg); }
+}

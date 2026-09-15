@@ -2,6 +2,7 @@ import './App.css'
 import { AccountPanel } from './components/account/AccountPanel'
 import { Leaderboard } from './components/ai/Leaderboard'
 import { TradeFeed } from './components/ai/TradeFeed'
+import { GrindOverlay } from './components/account/GrindOverlay'
 import { GrindPanel } from './components/account/GrindPanel'
 import { Positions } from './components/account/Positions'
 import { RoundPanel } from './components/account/RoundPanel'
@@ -75,6 +76,8 @@ export default function App() {
     <>
       <ConnectionBanner />
       <SessionGate><Board /></SessionGate>
+      {/* 판 위에 덮는다. 블러 너머로 시장이 계속 움직이는 것이 보여야 한다. */}
+      <GrindOverlay />
       <Toasts />
     </>
   )
