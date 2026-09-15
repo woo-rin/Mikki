@@ -446,3 +446,45 @@ def test_company_analysis_rejects_a_dead_session(client):
     response = analyze_company(client, "없는세션", "geno")
     assert response.status_code == 404
     assert response.json()["detail"]["code"] == "no_session"
+
+
+# ------------------------------------------------- 가격 이력과 평단
+
+def test_stocks_carry_no_average_cost_before_buying(client):
+    """0 이 아니라 null 이어야 한다. 0 이면 프론트가 틀린 손익을 그린다."""
+    for row in start(client)["stocks"]:
+        assert row["avg_cost"] is None
+
+
+def test_stocks_carry_the_average_cost_after_buying(client):
+    sid = start(client, ELAPSED)["session_id"]
+    client.post("/api/trade", json={"session_id": sid, "symbol": "geno",
+                                    "side": "buy", "qty": 5})
+
+    rows = {r["symbol"]: r for r in state(client, sid)["stocks"]}
+    assert rows["geno"]["avg_cost"] > 0
+    assert rows["hanbit"]["avg_cost"] is None
+
+
+def test_stocks_carry_price_history(client):
+    sid = start(client, ELAPSED)["session_id"]
+    for row in state(client, sid)["stocks"]:
+        assert isinstance(row["history"], list)
+        assert 0 < len(row["history"]) <= config.PRICE_HISTORY_TICKS
+        # 마지막 값이 현재가여야 차트와 호가가 어긋나지 않는다
+        assert row["history"][-1] == row["price"]
+
+
+def test_history_survives_a_fresh_poll(client):
+    """이게 이 작업의 목적이다 — 새로고침해도 차트가 남는다."""
+    sid = start(client, ELAPSED)["session_id"]
+    first = state(client, sid)["stocks"][0]["history"]
+    # 새 클라이언트가 처음 붙은 것과 같은 요청
+    again = state(client, sid)["stocks"][0]["history"]
+    assert len(again) >= len(first) > 1
+
+
+def test_history_never_grows_past_the_window(client):
+    sid = start(client, 600)["session_id"]        # 10분을 한 번에 따라잡는다
+    for row in state(client, sid)["stocks"]:
+        assert len(row["history"]) == config.PRICE_HISTORY_TICKS

@@ -294,3 +294,54 @@ def test_anchor_keeps_incremental_and_bulk_identical():
     advance(at_once, [], to_tick=40, rng=random.Random(99))
 
     assert stepwise.log_return == at_once.log_return
+
+
+# ------------------------------------------------------------ 가격 이력
+
+def test_history_records_one_price_per_tick():
+    state = _state()
+    advance(state, [], to_tick=10, rng=random.Random(2))
+    assert len(engine.history_of(state, "geno")) == 10
+
+
+def test_history_is_capped_at_the_window():
+    """따라잡기로 1,800 tick 이 돌아도 메모리는 고정이어야 한다."""
+    state = _state()
+    advance(state, [], to_tick=500, rng=random.Random(2))
+    for symbol in config.STOCKS:
+        assert len(engine.history_of(state, symbol)) == config.PRICE_HISTORY_TICKS
+
+
+def test_history_last_entry_is_the_current_price():
+    state = _state()
+    advance(state, [], to_tick=30, rng=random.Random(2))
+    for symbol in config.STOCKS:
+        assert engine.history_of(state, symbol)[-1] == price_of(state, symbol)
+
+
+def test_history_is_empty_before_the_first_tick():
+    assert engine.history_of(_state(), "geno") == []
+
+
+def test_incremental_and_bulk_produce_the_same_history():
+    """새로고침한 사람과 계속 보던 사람이 같은 차트를 봐야 한다."""
+    stepwise = _state()
+    rng = random.Random(9)
+    for tick in range(1, 101):
+        advance(stepwise, [], to_tick=tick, rng=rng)
+
+    at_once = _state()
+    advance(at_once, [], to_tick=100, rng=random.Random(9))
+
+    for symbol in config.STOCKS:
+        assert engine.history_of(stepwise, symbol) == engine.history_of(at_once, symbol)
+
+
+def test_history_follows_a_news_ramp(no_anchor):
+    """차트가 실제 가격을 따라가야 한다 — 램프 구간에서 단조 증가."""
+    state = _state()
+    p = plan(impact=0.10, ramp=20, publish_tick=0)
+    advance(state, [p], to_tick=20, rng=ZeroRandom(0))
+    series = engine.history_of(state, "geno")
+    assert series == sorted(series)
+    assert series[-1] > series[0]

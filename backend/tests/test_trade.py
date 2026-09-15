@@ -7,6 +7,7 @@ from app import config
 from app.engine import price_of
 from app.session import (
     TradeError,
+    avg_cost_of,
     buy,
     equity,
     max_affordable,
@@ -133,3 +134,62 @@ def test_equity_is_cash_plus_floored_valuation():
         + price_of(sess.prices, "pixel") * 3
     )
     assert equity(sess) == expected
+
+
+# ----------------------------------------------------------------- 평단
+
+def test_no_average_cost_before_buying():
+    """0 으로 채우면 프론트가 틀린 손익을 그린다. 모르면 모른다고 한다."""
+    assert avg_cost_of(fresh(), "geno") is None
+
+
+def test_average_cost_includes_the_fee():
+    sess = fresh()
+    price = price_of(sess.prices, "geno")
+    buy(sess, "geno", 10, now=0.0)
+
+    gross = price * 10
+    fee = math.floor(gross * config.TRADE_FEE_RATE)
+    assert sess.cost_basis["geno"] == gross + fee
+    assert avg_cost_of(sess, "geno") == (gross + fee) // 10
+
+
+def test_two_buys_average_together():
+    sess = fresh()
+    buy(sess, "geno", 5, now=0.0)
+    first = sess.cost_basis["geno"]
+    buy(sess, "geno", 5, now=0.0)
+
+    assert sess.cost_basis["geno"] > first
+    assert avg_cost_of(sess, "geno") == sess.cost_basis["geno"] // 10
+
+
+def test_partial_sell_keeps_the_average():
+    """일부를 팔아도 남은 주식의 취득 단가는 그대로다."""
+    sess = fresh()
+    buy(sess, "geno", 10, now=0.0)
+    before = avg_cost_of(sess, "geno")
+
+    sell(sess, "geno", 4, now=0.0)
+
+    assert sess.holdings["geno"] == 6
+    assert avg_cost_of(sess, "geno") == pytest.approx(before, abs=1)
+
+
+def test_selling_everything_clears_the_cost():
+    sess = fresh()
+    buy(sess, "geno", 10, now=0.0)
+    sell(sess, "geno", 10, now=0.0)
+
+    assert "geno" not in sess.cost_basis
+    assert avg_cost_of(sess, "geno") is None
+
+
+def test_rebuying_after_a_full_sell_starts_fresh():
+    sess = fresh()
+    buy(sess, "geno", 10, now=0.0)
+    sell(sess, "geno", 10, now=0.0)
+    buy(sess, "geno", 3, now=0.0)
+
+    assert sess.holdings["geno"] == 3
+    assert avg_cost_of(sess, "geno") == sess.cost_basis["geno"] // 3

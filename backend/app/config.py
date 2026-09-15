@@ -69,6 +69,10 @@ GRIND_DECAY_DEN = 5
 
 TICK_SECONDS = 1
 
+# 서버가 들고 있는 가격 이력 길이. 새로고침해도 차트가 남는다.
+# 따라잡기로 1,800 tick 이 돌아도 메모리는 이 값에 고정된다.
+PRICE_HISTORY_TICKS = 60
+
 NEWS_INTERVAL_RANGE = (12, 18)
 NEWS_BATCH_SIZE = 20
 NEWS_FIRST_WAIT_COUNT = 5

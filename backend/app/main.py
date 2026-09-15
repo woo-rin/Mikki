@@ -106,6 +106,10 @@ def _stock_rows(sess: GameSession) -> list[dict]:
             ),
             "held": sess.holdings.get(symbol, 0),
             "fundamentals_analyzed": symbol in sess.analyzed_symbols,
+            # 평단과 가격 이력은 서버가 들고 있다. 새로고침해도 남는다.
+            # 안 들고 있으면 null 이다 — 0 을 주면 프론트가 틀린 손익을 그린다.
+            "avg_cost": rules.avg_cost_of(sess, symbol),
+            "history": engine.history_of(sess.prices, symbol),
         })
     return rows
 

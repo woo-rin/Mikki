@@ -26,6 +26,9 @@ class GameSession:
     prices: PriceState
     cash: int
     holdings: dict[str, int] = field(default_factory=dict)
+    # 종목별 누적 매입원가(수수료 포함). holdings 의 모양은 건드리지 않는다 —
+    # 읽는 곳이 여럿이라 파급이 크다.
+    cost_basis: dict[str, int] = field(default_factory=dict)
     round_no: int = 1
     round_start_equity: int = config.SEED_CASH
     target: int = config.SEED_CASH * config.ROUND_TARGET_MULTIPLIER
@@ -95,6 +98,8 @@ def buy(sess: GameSession, symbol: str, qty: int, now: float) -> dict:
         raise TradeError("insufficient_cash", "현금이 부족합니다.")
     sess.cash -= gross + fee
     sess.holdings[symbol] = sess.holdings.get(symbol, 0) + qty
+    # 수수료를 원가에 넣는다. 빼면 평가손익이 실제보다 좋아 보인다.
+    sess.cost_basis[symbol] = sess.cost_basis.get(symbol, 0) + gross + fee
     return {"side": "buy", "symbol": symbol, "qty": qty,
             "price": price, "gross": gross, "fee": fee}
 
@@ -112,10 +117,25 @@ def sell(sess: GameSession, symbol: str, qty: int, now: float) -> dict:
     sess.cash += gross - fee
     if held == qty:
         del sess.holdings[symbol]
+        sess.cost_basis.pop(symbol, None)
     else:
         sess.holdings[symbol] = held - qty
+        # 판 만큼만 원가에서 덜어낸다. 남은 주식의 취득 단가는 그대로다.
+        cost = sess.cost_basis.get(symbol, 0)
+        sess.cost_basis[symbol] = cost - math.floor(cost * qty / held)
     return {"side": "sell", "symbol": symbol, "qty": qty,
             "price": price, "gross": gross, "fee": fee}
+
+
+def avg_cost_of(sess: GameSession, symbol: str) -> int | None:
+    """취득 단가(수수료 포함), 내림. 안 들고 있으면 None.
+
+    0 으로 채우지 않는다 — 프론트가 그걸 평단으로 믿고 틀린 손익을 그린다.
+    """
+    qty = sess.holdings.get(symbol, 0)
+    if qty <= 0:
+        return None
+    return sess.cost_basis.get(symbol, 0) // qty
 
 
 # ------------------------------------------------------- 파산과 노가다

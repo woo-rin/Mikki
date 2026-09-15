@@ -6,6 +6,7 @@
 """
 import math
 import random
+from collections import deque
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
@@ -18,6 +19,8 @@ class PriceState:
     log_return: dict[str, float] = field(default_factory=dict)
     start_price: dict[str, int] = field(default_factory=dict)
     anchor_log: dict[str, float] = field(default_factory=dict)
+    # 종목별 최근 가격. maxlen 이 걸려 있어 길이가 저절로 유지된다.
+    history: dict[str, deque] = field(default_factory=dict)
     last_tick: int = 0
 
 
@@ -40,6 +43,10 @@ def new_state(fair_values: dict[str, int], rng: random.Random) -> PriceState:
         log_return={symbol: 0.0 for symbol in config.STOCKS},
         start_price=start_price,
         anchor_log=anchor_log,
+        history={
+            symbol: deque(maxlen=config.PRICE_HISTORY_TICKS)
+            for symbol in config.STOCKS
+        },
         last_tick=0,
     )
 
@@ -86,12 +93,20 @@ def advance(
         for plan in active:
             if plan.publish_tick < tick <= plan.publish_tick + plan.ramp_seconds:
                 state.log_return[plan.symbol] += plan.impact / plan.ramp_seconds
+        # 이력은 램프까지 반영된 뒤에 찍는다. 순서가 바뀌면 차트가 한 tick 뒤처진다.
+        for symbol in config.STOCKS:
+            state.history[symbol].append(price_of(state, symbol))
     state.last_tick = max(state.last_tick, to_tick)
 
 
 def price_of(state: PriceState, symbol: str) -> int:
     """원 단위 정수. 내림으로 통일한다."""
     return math.floor(state.start_price[symbol] * math.exp(state.log_return[symbol]))
+
+
+def history_of(state: PriceState, symbol: str) -> list[int]:
+    """최근 가격들. 오래된 것이 앞이다."""
+    return list(state.history[symbol])
 
 
 def ramp_progress(plan: NewsPlan, tick: int) -> float:
