@@ -32,7 +32,7 @@ class GameSession:
     cost_basis: dict[str, int] = field(default_factory=dict)
     round_no: int = 1
     round_start_equity: int = config.SEED_CASH
-    target: int = config.SEED_CASH * config.ROUND_TARGET_MULTIPLIER
+    target: int = config.SEED_CASH * config.TARGET_MULTIPLIER
     analyses_left: int = config.ANALYSES_PER_ROUND
     company_analyses_left: int = config.COMPANY_ANALYSES_PER_ROUND
     analyzed_symbols: set[str] = field(default_factory=set)
@@ -70,7 +70,7 @@ def new_session(
         prices=engine.new_state(fundamentals.fair_values(quarter_index), rng),
         cash=config.SEED_CASH,
         round_start_equity=config.SEED_CASH,
-        target=config.SEED_CASH * config.ROUND_TARGET_MULTIPLIER,
+        target=config.SEED_CASH * config.TARGET_MULTIPLIER,
         last_seen=started_at,
         ais=participants.new_participants(ai_count),
         # AI 판단용 시드. engine 의 rng 와 섞지 않는다.
@@ -255,14 +255,22 @@ def spend_company_analysis(sess: GameSession, symbol: str, now: float) -> bool:
 # --------------------------------------------------------------- 라운드
 
 def goal_reached(sess: GameSession) -> bool:
-    return equity(sess) >= sess.target
+    """목표는 현금이다. 파산은 총자산이다 — 잣대를 통일하지 않는다.
+
+    목표는 "레이스를 얼마나 달렸나" 라 팔아서 확정한 것만 세고,
+    파산은 "아직 게임을 할 수 있나" 라 주식도 함께 센다.
+
+    이것이 매도에 의미를 준다. 총자산 기준이면 사서 오르기만 해도 이기므로
+    팔 이유가 없다 — 매도가 장식이 된다.
+    """
+    return sess.cash >= sess.target
 
 
 def advance_round(sess: GameSession) -> None:
     current = equity(sess)
     sess.round_no += 1
     sess.round_start_equity = current
-    sess.target = current * config.ROUND_TARGET_MULTIPLIER
+    sess.target = current * config.TARGET_MULTIPLIER
     sess.analyses_left = config.ANALYSES_PER_ROUND
     sess.company_analyses_left = config.COMPANY_ANALYSES_PER_ROUND
     sess.analyzed_symbols.clear()

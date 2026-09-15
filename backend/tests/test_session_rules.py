@@ -139,7 +139,7 @@ def test_grind_extracts_at_most_half_the_seed_per_round():
     """상시로 열어도 라운드 목표(3배)에는 노가다만으로 못 닿는다."""
     total = sum(grind_payout(i) for i in range(40))
     assert total < config.SEED_CASH
-    assert total < config.SEED_CASH * config.ROUND_TARGET_MULTIPLIER
+    assert total < config.SEED_CASH * config.TARGET_MULTIPLIER
 
 
 def test_grind_cannot_be_started_while_already_locked():
@@ -554,3 +554,41 @@ def test_prices_start_from_the_picked_quarter():
             sess.prices.anchor_log[symbol]
         )
         assert implied == pytest.approx(expected[symbol], rel=1e-9)
+
+
+# ------------------------------------------------------------ 현금 목표
+
+def test_goal_counts_cash_only():
+    """목표는 '레이스를 얼마나 달렸나' 다. 팔아서 확정한 것만 센다."""
+    sess = fresh()
+    sess.cash = sess.target
+    assert goal_reached(sess) is True
+
+
+def test_holding_stock_worth_the_target_is_not_enough():
+    """사서 오르기만 해서는 못 이긴다. 이것이 매도에 의미를 준다."""
+    sess = fresh()
+    price = engine.price_of(sess.prices, "geno")
+    sess.holdings["geno"] = sess.target // price + 1
+    sess.cash = 0
+
+    assert equity(sess) >= sess.target
+    assert goal_reached(sess) is False
+
+
+def test_bankruptcy_still_counts_holdings():
+    """잣대를 통일하지 않는다 — 파산은 '아직 할 수 있나' 다."""
+    sess = fresh()
+    price = engine.price_of(sess.prices, "geno")
+    sess.holdings["geno"] = 500_000 // price
+    sess.cash = 0
+
+    assert sess.cash < config.BANKRUPTCY_THRESHOLD
+    assert is_bankrupt(sess) is False
+
+
+def test_target_is_three_times_the_seed_and_fixed():
+    sess = fresh()
+    assert sess.target == config.SEED_CASH * config.TARGET_MULTIPLIER
+    sess.cash = 9_000_000
+    assert sess.target == config.SEED_CASH * config.TARGET_MULTIPLIER

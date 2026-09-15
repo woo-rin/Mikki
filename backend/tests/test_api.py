@@ -49,7 +49,7 @@ def test_new_game_returns_seed_state(client):
     assert body["cash"] == config.SEED_CASH
     assert body["equity"] == config.SEED_CASH
     assert body["round_no"] == 1
-    assert body["target"] == config.SEED_CASH * config.ROUND_TARGET_MULTIPLIER
+    assert body["target"] == config.SEED_CASH * config.TARGET_MULTIPLIER
     assert body["analyses_left"] == config.ANALYSES_PER_ROUND
     assert len(body["stocks"]) == len(config.STOCKS)
     assert body["session_id"]
@@ -258,7 +258,7 @@ def test_next_round_triples_the_target_and_refills_analyses(client):
     body = response.json()
     assert body["round_no"] == 2
     assert body["analyses_left"] == config.ANALYSES_PER_ROUND
-    assert body["target"] == sess.round_start_equity * config.ROUND_TARGET_MULTIPLIER
+    assert body["target"] == sess.round_start_equity * config.TARGET_MULTIPLIER
 
 
 def test_state_since_returns_only_newer_news(client):

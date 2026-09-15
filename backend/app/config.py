@@ -29,7 +29,8 @@ STOCKS: dict[str, Stock] = {
 }
 
 SEED_CASH = 1_000_000
-ROUND_TARGET_MULTIPLIER = 3
+# 목표 배수. 라운드가 없으므로 시드 기준 고정이다.
+TARGET_MULTIPLIER = 3
 TRADE_FEE_RATE = 0.002
 BANKRUPTCY_THRESHOLD = 100_000
 
