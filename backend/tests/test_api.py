@@ -7,9 +7,10 @@ from fastapi.testclient import TestClient
 from app import config, fundamentals
 from app.main import _refilling, app, sessions
 
-# 뉴스는 12~18초 간격으로 등장하므로 tick 0 에는 아직 한 건도 보이지 않는다.
+# 뉴스는 약 30초 간격으로 등장하므로 tick 0 에는 아직 한 건도 보이지 않는다.
 # 뉴스가 필요한 테스트는 started_at 을 과거로 밀어 시간을 흐르게 만든다.
-ELAPSED = 120
+# 분석 5회를 소진하는 테스트가 있으므로 기사 5건이 확실히 나올 만큼 흘려보낸다.
+ELAPSED = 240
 
 
 @pytest.fixture(autouse=True)
@@ -322,9 +323,14 @@ def test_ramp_remaining_is_measured_after_the_call_returns(client, monkeypatch):
 
     # 고른 기사의 램프가 막 시작된 시점으로 시계를 맞춘다. 어떤 기사가 마침
     # 램프 중이었는지에 기대지 않도록 결정론적으로 세운다.
+    #
+    # tick 은 TICK_QUANTUM 의 배수로 내림되므로, 공개 시각 바로 다음 양자에
+    # 맞춘다. publish_tick + 1 로 잡으면 내림되어 아직 공개 전이 될 수 있다.
     item = sess.news[0]
     ramp_end = item.plan.publish_tick + item.plan.ramp_seconds
-    sess.started_at = _time.monotonic() - (item.plan.publish_tick + 1)
+    q = config.TICK_QUANTUM
+    target_tick = (item.plan.publish_tick // q + 1) * q
+    sess.started_at = _time.monotonic() - target_tick
 
     pre_tick = state(client, sid)["tick"]
     assert pre_tick < ramp_end, "설정이 틀렸다 — 호출 전에 이미 램프가 끝났다"
@@ -586,3 +592,76 @@ def test_more_ais_means_more_trades(client):
     quiet = len(state(client, few["session_id"])["trades"])
     loud = len(state(client, many["session_id"])["trades"])
     assert loud > quiet
+
+
+# ------------------------------------------ 시세 갱신 주기와 세션 수명
+
+def test_price_only_advances_on_the_quantum(client):
+    """시세는 5초에 한 번만 앞으로 간다. tick 은 5의 배수여야 한다."""
+    for elapsed in (0, 3, 5, 7, 12, 29):
+        sid = start(client, elapsed)["session_id"]
+        tick = state(client, sid)["tick"]
+        assert tick % config.TICK_QUANTUM == 0, f"{elapsed}초 → tick {tick}"
+        assert tick <= elapsed
+
+
+def test_price_is_identical_inside_one_quantum(client):
+    """같은 5초 창 안에서는 몇 번을 폴링해도 값이 같다."""
+    sid = start(client, 20)["session_id"]
+    first = state(client, sid)
+    second = state(client, sid)
+    assert first["tick"] == second["tick"]
+    assert [s["price"] for s in first["stocks"]] == [s["price"] for s in second["stocks"]]
+
+
+def test_news_comes_about_every_thirty_seconds(client):
+    """간격이 촘촘하면 읽을 틈이 없고 메모리도 빨리 찬다."""
+    lo, hi = config.NEWS_INTERVAL_RANGE
+    assert 28 <= lo <= hi <= 32
+
+    sid = start(client, 300)["session_id"]
+    ticks = sorted(300 - n["age_seconds"] for n in state(client, sid)["news"])
+    gaps = [b - a for a, b in zip(ticks, ticks[1:])]
+    assert gaps, "5분이 흘렀는데 기사가 두 건도 안 나왔다"
+    assert all(lo - config.TICK_QUANTUM <= g <= hi + config.TICK_QUANTUM for g in gaps), gaps
+
+
+def test_idle_sessions_are_swept_when_a_new_game_starts(client):
+    """세션이 영원히 쌓이면 버려진 판 100개가 100MB 를 먹는다."""
+    stale = start(client)["session_id"]
+    sessions[stale].last_seen -= config.SESSION_IDLE_SECONDS + 60
+
+    fresh_id = client.post("/api/game").json()["session_id"]
+
+    assert stale not in sessions
+    assert fresh_id in sessions
+    assert client.get(f"/api/state?session_id={stale}").status_code == 404
+
+
+def test_a_live_session_survives_the_sweep(client):
+    alive = start(client)["session_id"]
+    client.post("/api/game")
+    assert alive in sessions
+    assert client.get(f"/api/state?session_id={alive}").status_code == 200
+
+
+def test_polling_keeps_a_session_alive(client):
+    sid = start(client)["session_id"]
+    sessions[sid].last_seen -= config.SESSION_IDLE_SECONDS + 60
+    state(client, sid)                       # 폴링이 수명을 갱신한다
+    client.post("/api/game")
+    assert sid in sessions
+
+
+def test_sweeping_also_drops_the_lock_and_refill_marks(client):
+    """세션만 지우고 부속을 남기면 누수가 그대로다."""
+    import app.main as main
+    stale = start(client)["session_id"]
+    state(client, stale)                     # 락을 만든다
+    assert stale in main._locks
+    sessions[stale].last_seen -= config.SESSION_IDLE_SECONDS + 60
+
+    client.post("/api/game")
+
+    assert stale not in main._locks
+    assert stale not in main._refilling

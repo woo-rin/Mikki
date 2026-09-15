@@ -67,7 +67,25 @@ def _get(session_id: str) -> GameSession:
     sess = sessions.get(session_id)
     if sess is None:
         raise HTTPException(404, {"code": "no_session", "message": "게임이 만료됐습니다."})
+    # 요청이 닿을 때마다 수명을 갱신한다. 폴링 중인 판은 절대 쓸려나가지 않는다.
+    sess.last_seen = time.monotonic()
     return sess
+
+
+def _sweep(now: float) -> int:
+    """오래 조용한 세션을 버린다. DB 가 없으므로 아무도 안 지우면 영원히 남는다.
+
+    세션만 지우고 락과 보충 표시를 남기면 누수가 그대로다 — 함께 정리한다.
+    """
+    dead = [
+        sid for sid, sess in sessions.items()
+        if now - sess.last_seen > config.SESSION_IDLE_SECONDS
+    ]
+    for sid in dead:
+        sessions.pop(sid, None)
+        _locks.pop(sid, None)
+        _refilling.discard(sid)
+    return len(dead)
 
 
 def _lock(session_id: str) -> asyncio.Lock:
@@ -80,7 +98,14 @@ def _fail(error: TradeError) -> HTTPException:
 
 
 def _tick_of(sess: GameSession, now: float) -> int:
-    return int((now - sess.started_at) / config.TICK_SECONDS)
+    """5의 배수로 끊은 tick. 시세는 이 주기로만 앞으로 간다.
+
+    tick 단위는 여전히 1초다 — 램프·AI 반응·앵커가 전부 이 단위로 쓰여 있고,
+    엔진을 5초 단위로 바꾸면 그것들이 함께 5배 길어져 밸런스가 무너진다.
+    관측 시점만 끊으면 보이는 결과는 같고 의미는 하나도 안 바뀐다.
+    """
+    elapsed = int((now - sess.started_at) / config.TICK_SECONDS)
+    return elapsed // config.TICK_QUANTUM * config.TICK_QUANTUM
 
 
 def _sync(sess: GameSession, now: float) -> int:
@@ -254,6 +279,9 @@ async def new_game(
         })
 
     now = time.monotonic()
+    # 새 판을 만들 때가 버려진 판을 치우기 좋은 순간이다. 타이머를 따로 돌리지 않는다.
+    _sweep(now)
+
     session_id = uuid.uuid4().hex
     rng = random.Random()
     sess = rules.new_session(session_id, rng, started_at=now, ai_count=ai_count)

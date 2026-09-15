@@ -342,7 +342,7 @@ def test_advance_round_does_not_move_prices():
 def test_new_session_seats_the_default_count():
     sess = fresh()
     assert len(sess.ais) == config.AI_COUNT_DEFAULT
-    assert sess.trades == []
+    assert len(sess.trades) == 0
     assert sess.trade_seq == 0
 
 
@@ -517,3 +517,24 @@ def test_ai_driven_incremental_matches_bulk():
     assert stepwise.prices.flow_log == at_once.prices.flow_log
     assert [(t["seq"], t["actor"], t["side"], t["qty"]) for t in stepwise.trades] \
         == [(t["seq"], t["actor"], t["side"], t["qty"]) for t in at_once.trades]
+
+
+# ------------------------------------------------------------ 체결 상한
+
+def test_trade_feed_has_a_ceiling():
+    """상한이 없으면 1시간에 2,400건까지 쌓여 세션 하나가 1MB 를 넘는다."""
+    sess = fresh()
+    for tick in range(config.TRADES_MAX + 200):
+        record_fill(sess, tick, "kim", {"side": "buy", "symbol": "geno",
+                                        "qty": 1, "price": 1, "value": 1})
+    assert len(sess.trades) == config.TRADES_MAX
+
+
+def test_trade_feed_keeps_the_newest():
+    sess = fresh()
+    for tick in range(config.TRADES_MAX + 10):
+        record_fill(sess, tick, "kim", {"side": "buy", "symbol": "geno",
+                                        "qty": 1, "price": 1, "value": 1})
+    seqs = [t["seq"] for t in sess.trades]
+    assert seqs[-1] == config.TRADES_MAX + 10
+    assert seqs == sorted(seqs)

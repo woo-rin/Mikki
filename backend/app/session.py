@@ -41,7 +41,9 @@ class GameSession:
     pending_payout: int = 0
     ais: list[participants.AIState] = field(default_factory=list)
     ai_seed: int = 0
-    trades: list[dict] = field(default_factory=list)
+    # 마지막으로 요청이 닿은 시각. 오래 조용하면 쓸려나간다.
+    last_seen: float = 0.0
+    trades: deque = field(default_factory=deque)
     trade_seq: int = 0
     # (tick, symbol, qty). 오래된 것은 prune_volume 이 버린다.
     volume_window: deque = field(default_factory=deque)
@@ -64,10 +66,12 @@ def new_session(
         cash=config.SEED_CASH,
         round_start_equity=config.SEED_CASH,
         target=config.SEED_CASH * config.ROUND_TARGET_MULTIPLIER,
+        last_seen=started_at,
         ais=participants.new_participants(ai_count),
         # AI 판단용 시드. engine 의 rng 와 섞지 않는다.
         ai_seed=rng.randrange(2**31),
         volume_total={symbol: 0 for symbol in config.STOCKS},
+        trades=deque(maxlen=config.TRADES_MAX),
     )
 
 

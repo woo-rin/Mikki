@@ -109,6 +109,13 @@ FLOW_MAX = 0.03
 # 거래량 집계 구간. 짧으면 튀고 길면 둔하다.
 VOLUME_WINDOW_TICKS = 60
 
+# 체결 피드 상한. 없으면 1시간에 2,400건까지 쌓여 세션 하나가 1MB 를 넘는다.
+TRADES_MAX = 500
+
+# 이만큼 조용한 세션은 버린다. 새 게임을 만들 때 쓸어낸다 — DB 가 없으므로
+# 아무도 안 지우면 버려진 판이 메모리에 영원히 남는다.
+SESSION_IDLE_SECONDS = 1800
+
 GRIND_LOCK_SECONDS = 120
 GRIND_BASE_PAYOUT = 200_000
 # 0.6 을 3/5 로 둔다. 200_000 * 0.6 ** 3 은 43199.99... 가 되어 4회차 보수가
@@ -118,11 +125,18 @@ GRIND_DECAY_DEN = 5
 
 TICK_SECONDS = 1
 
+# 시세는 이 주기로만 앞으로 간다. tick 자체는 1초를 유지하므로 램프·AI 반응·
+# 앵커의 의미가 전부 그대로다 — 관측 시점만 5의 배수로 끊는다.
+#
+# 엔진을 5초 단위로 바꾸면 램프(15~40초)와 AI 반응(1~9초)이 함께 5배 길어져
+# 밸런스를 다시 잡아야 하고, 특히 AI 반응 속도 차이가 뭉개진다.
+TICK_QUANTUM = 5
+
 # 서버가 들고 있는 가격 이력 길이. 새로고침해도 차트가 남는다.
 # 따라잡기로 1,800 tick 이 돌아도 메모리는 이 값에 고정된다.
 PRICE_HISTORY_TICKS = 60
 
-NEWS_INTERVAL_RANGE = (12, 18)
+NEWS_INTERVAL_RANGE = (28, 32)
 NEWS_BATCH_SIZE = 20
 NEWS_FIRST_WAIT_COUNT = 5
 NEWS_REFILL_THRESHOLD = 5
