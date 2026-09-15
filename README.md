@@ -41,7 +41,8 @@ SID=$(curl -s -X POST localhost:7999/api/game | python3 -c 'import json,sys; pri
 curl -s "localhost:7999/api/state?session_id=$SID" | python3 -m json.tool
 ```
 
-뉴스는 12~18초 간격으로 등장하므로 시작 직후에는 피드가 비어 있는 것이 정상이다.
+뉴스는 약 30초 간격으로 등장하므로 시작 직후에는 피드가 비어 있는 것이 정상이다.
+시세는 5초에 한 번 갱신된다.
 
 ## 구조
 
