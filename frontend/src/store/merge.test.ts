@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { baseSnapshot, capturedAnalyze, capturedTrade, sampleNews } from '../mocks/fixtures'
+import {
+  baseSnapshot, capturedAnalyze, capturedCompanyAnalysis, capturedTrade, sampleNews,
+} from '../mocks/fixtures'
 import { applyBuy, emptyPosition } from '../lib/money'
 import {
-  HISTORY_LIMIT, appendHistory, applyGrindToSnapshot, applyTradeToSnapshot,
-  attachAnalysis, isFresher, maxNewsId, positionRows, upsertNews,
+  HISTORY_LIMIT, appendHistory, applyCompanyAnalysisToSnapshot, applyGrindToSnapshot,
+  applyTradeToSnapshot, attachAnalysis, isFresher, maxNewsId, positionRows, upsertNews,
 } from './merge'
 
 describe('가격 이력', () => {
@@ -158,5 +160,24 @@ describe('액션 응답 반영', () => {
     expect(next.locked).toBe(true)
     expect(next.lock_remaining).toBe(120)
     expect(next.grind_count).toBe(1)
+  })
+})
+
+describe('기업분석 반영', () => {
+  it('잔여 횟수를 응답대로 쓴다', () => {
+    const next = applyCompanyAnalysisToSnapshot(baseSnapshot(), capturedCompanyAnalysis)
+    expect(next.company_analyses_left).toBe(1)
+  })
+
+  it('그 종목만 분석됨으로 표시한다', () => {
+    const next = applyCompanyAnalysisToSnapshot(baseSnapshot(), capturedCompanyAnalysis)
+    expect(next.stocks.find((s) => s.symbol === 'geno')?.fundamentals_analyzed).toBe(true)
+    expect(next.stocks.find((s) => s.symbol === 'hanbit')?.fundamentals_analyzed).toBe(false)
+  })
+
+  it('같은 종목을 다시 사면 서버가 횟수를 안 깎는다 — 응답을 그대로 믿는다', () => {
+    const once = applyCompanyAnalysisToSnapshot(baseSnapshot(), capturedCompanyAnalysis)
+    const twice = applyCompanyAnalysisToSnapshot(once, capturedCompanyAnalysis)
+    expect(twice.company_analyses_left).toBe(1)
   })
 })

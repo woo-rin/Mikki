@@ -1,5 +1,6 @@
 import type {
-  AnalyzeResult, GrindResult, NewsItem, Snapshot, Strength, Symbol_, TradeResult,
+  AnalyzeResult, CompanyAnalysisResult, GrindResult, NewsItem, Snapshot, Strength,
+  Symbol_, TradeResult,
 } from '../api/types'
 import { publishTick as toPublishTick, rampEndTick } from '../lib/derive'
 import { type Position, unrealizedFor } from '../lib/money'
@@ -144,6 +145,23 @@ export function applyTradeToSnapshot(snap: Snapshot, res: TradeResult): Snapshot
 
 export function applyAnalyzeToSnapshot(snap: Snapshot, res: AnalyzeResult): Snapshot {
   return { ...snap, analyses_left: res.analyses_left }
+}
+
+/**
+ * 잔여 횟수는 응답을 그대로 쓴다. 같은 종목을 다시 사면 서버가 깎지 않으므로
+ * 프론트가 따로 세면 어긋난다.
+ */
+export function applyCompanyAnalysisToSnapshot(
+  snap: Snapshot,
+  res: CompanyAnalysisResult,
+): Snapshot {
+  return {
+    ...snap,
+    company_analyses_left: res.company_analyses_left,
+    stocks: snap.stocks.map((s) =>
+      s.symbol === res.symbol ? { ...s, fundamentals_analyzed: true } : s,
+    ),
+  }
 }
 
 /**

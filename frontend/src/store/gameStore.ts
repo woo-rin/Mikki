@@ -1,7 +1,10 @@
 import { create } from 'zustand'
-import type { AnalyzeResult, GrindResult, Snapshot, TradeResult } from '../api/types'
+import type {
+  AnalyzeResult, CompanyAnalysisResult, GrindResult, Snapshot, TradeResult,
+} from '../api/types'
 import {
-  applyAnalyzeToSnapshot, applyGrindToSnapshot, applyTradeToSnapshot, isFresher,
+  applyAnalyzeToSnapshot, applyCompanyAnalysisToSnapshot, applyGrindToSnapshot,
+  applyTradeToSnapshot, isFresher,
 } from './merge'
 
 /** 서버가 준 것만 담는다. 판정을 다시 계산하지 않는다. */
@@ -18,6 +21,7 @@ interface GameState {
   forceSnapshot: (snap: Snapshot) => void
   applyTrade: (res: TradeResult) => void
   applyAnalyze: (res: AnalyzeResult) => void
+  applyCompanyAnalysis: (res: CompanyAnalysisResult) => void
   applyGrind: (res: GrindResult) => void
   setConnected: (v: boolean) => void
   setSessionGone: (v: boolean) => void
@@ -50,6 +54,9 @@ export const useGameStore = create<GameState>((set) => ({
 
   applyAnalyze: (res) =>
     set((s) => (s.snapshot ? { snapshot: applyAnalyzeToSnapshot(s.snapshot, res) } : {})),
+
+  applyCompanyAnalysis: (res) =>
+    set((s) => (s.snapshot ? { snapshot: applyCompanyAnalysisToSnapshot(s.snapshot, res) } : {})),
 
   applyGrind: (res) =>
     set((s) => (s.snapshot ? { snapshot: applyGrindToSnapshot(s.snapshot, res) } : {})),
