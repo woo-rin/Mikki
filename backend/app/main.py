@@ -22,6 +22,7 @@ from app import (
     fallback,
     fundamentals,
     news,
+    participants,
     session as rules,
 )
 from app.models import NewsPlan
@@ -66,7 +67,25 @@ def _get(session_id: str) -> GameSession:
     sess = sessions.get(session_id)
     if sess is None:
         raise HTTPException(404, {"code": "no_session", "message": "게임이 만료됐습니다."})
+    # 요청이 닿을 때마다 수명을 갱신한다. 폴링 중인 판은 절대 쓸려나가지 않는다.
+    sess.last_seen = time.monotonic()
     return sess
+
+
+def _sweep(now: float) -> int:
+    """오래 조용한 세션을 버린다. DB 가 없으므로 아무도 안 지우면 영원히 남는다.
+
+    세션만 지우고 락과 보충 표시를 남기면 누수가 그대로다 — 함께 정리한다.
+    """
+    dead = [
+        sid for sid, sess in sessions.items()
+        if now - sess.last_seen > config.SESSION_IDLE_SECONDS
+    ]
+    for sid in dead:
+        sessions.pop(sid, None)
+        _locks.pop(sid, None)
+        _refilling.discard(sid)
+    return len(dead)
 
 
 def _lock(session_id: str) -> asyncio.Lock:
@@ -79,18 +98,38 @@ def _fail(error: TradeError) -> HTTPException:
 
 
 def _tick_of(sess: GameSession, now: float) -> int:
-    return int((now - sess.started_at) / config.TICK_SECONDS)
+    """5의 배수로 끊은 tick. 시세는 이 주기로만 앞으로 간다.
+
+    tick 단위는 여전히 1초다 — 램프·AI 반응·앵커가 전부 이 단위로 쓰여 있고,
+    엔진을 5초 단위로 바꾸면 그것들이 함께 5배 길어져 밸런스가 무너진다.
+    관측 시점만 끊으면 보이는 결과는 같고 의미는 하나도 안 바뀐다.
+    """
+    elapsed = int((now - sess.started_at) / config.TICK_SECONDS)
+    return elapsed // config.TICK_QUANTUM * config.TICK_QUANTUM
 
 
 def _sync(sess: GameSession, now: float) -> int:
-    """tick 을 현재까지 진행하고 노가다 보수를 정산한다."""
+    """tick 을 현재까지 진행하고 노가다 보수를 정산한다.
+
+    AI 매매는 tick 루프 안에서 돈다 — 매수가 그 tick 의 가격을 밀고, 그것이
+    다음 tick 의 AI 판단에 들어간다. engine 은 순주문액만 받는다.
+    """
     tick = _tick_of(sess, now)
-    engine.advance(sess.prices, sess.plans, tick, sess.rng)
+
+    def on_tick(at: int) -> dict[str, int]:
+        return participants.run_tick(
+            sess.ais, sess.plans, at, sess.ai_seed,
+            lambda symbol: engine.price_of(sess.prices, symbol),
+            lambda actor, fill: rules.record_fill(sess, at, actor, fill),
+        )
+
+    engine.advance(sess.prices, sess.plans, tick, sess.rng, on_tick=on_tick)
+    rules.prune_volume(sess, tick)
     rules.settle_grind(sess, now)
     return tick
 
 
-def _stock_rows(sess: GameSession) -> list[dict]:
+def _stock_rows(sess: GameSession, tick: int) -> list[dict]:
     rows = []
     for symbol, stock in config.STOCKS.items():
         price = engine.price_of(sess.prices, symbol)
@@ -106,6 +145,12 @@ def _stock_rows(sess: GameSession) -> list[dict]:
             ),
             "held": sess.holdings.get(symbol, 0),
             "fundamentals_analyzed": symbol in sess.analyzed_symbols,
+            # 평단과 가격 이력은 서버가 들고 있다. 새로고침해도 남는다.
+            # 안 들고 있으면 null 이다 — 0 을 주면 프론트가 틀린 손익을 그린다.
+            "avg_cost": rules.avg_cost_of(sess, symbol),
+            "history": engine.history_of(sess.prices, symbol),
+            "volume": rules.volume_of(sess, symbol),
+            "volume_avg": rules.volume_avg_of(sess, symbol, tick),
         })
     return rows
 
@@ -131,7 +176,13 @@ def _news_rows(sess: GameSession, tick: int, since: int) -> list[dict]:
     return rows
 
 
-def _snapshot(sess: GameSession, now: float, since: int = -1) -> dict:
+def _trade_rows(sess: GameSession, trades_since: int) -> list[dict]:
+    return [row for row in sess.trades if row["seq"] > trades_since]
+
+
+def _snapshot(
+    sess: GameSession, now: float, since: int = -1, trades_since: int = -1
+) -> dict:
     tick = _sync(sess, now)
     return {
         "session_id": sess.session_id,
@@ -143,12 +194,14 @@ def _snapshot(sess: GameSession, now: float, since: int = -1) -> dict:
         "round_start_equity": sess.round_start_equity,
         "analyses_left": sess.analyses_left,
         "company_analyses_left": sess.company_analyses_left,
+        "ai": rules.ai_rows(sess),
+        "trades": _trade_rows(sess, trades_since),
         "bankrupt": rules.is_bankrupt(sess),
         "locked": rules.is_locked(sess, now),
         "lock_remaining": rules.lock_remaining(sess, now),
         "grind_count": sess.grind_count,
         "goal_reached": rules.goal_reached(sess),
-        "stocks": _stock_rows(sess),
+        "stocks": _stock_rows(sess, tick),
         "news": _news_rows(sess, tick, since),
         "news_total": len(sess.news),
     }
@@ -209,12 +262,29 @@ class CompanyAnalyzeBody(SessionBody):
     symbol: str
 
 
+class NewGameBody(BaseModel):
+    ai_count: int = config.AI_COUNT_DEFAULT
+
+
 @app.post("/api/game")
-async def new_game(background: BackgroundTasks) -> dict:
+async def new_game(
+    background: BackgroundTasks, body: NewGameBody | None = None
+) -> dict:
+    # 본문 없이 부르는 기존 클라이언트를 깨지 않는다.
+    ai_count = body.ai_count if body is not None else config.AI_COUNT_DEFAULT
+    if not config.AI_COUNT_MIN <= ai_count <= config.AI_COUNT_MAX:
+        raise HTTPException(400, {
+            "code": "bad_ai_count",
+            "message": f"AI 수는 {config.AI_COUNT_MIN}~{config.AI_COUNT_MAX} 입니다.",
+        })
+
     now = time.monotonic()
+    # 새 판을 만들 때가 버려진 판을 치우기 좋은 순간이다. 타이머를 따로 돌리지 않는다.
+    _sweep(now)
+
     session_id = uuid.uuid4().hex
     rng = random.Random()
-    sess = rules.new_session(session_id, rng, started_at=now)
+    sess = rules.new_session(session_id, rng, started_at=now, ai_count=ai_count)
 
     # 첫 배치만 기다린다. 20건을 한 번에 기다리면 게임 시작이 10초를 넘는다.
     first = build_plans(
@@ -238,11 +308,14 @@ async def new_game(background: BackgroundTasks) -> dict:
 
 @app.get("/api/state")
 async def get_state(
-    session_id: str, background: BackgroundTasks, since: int = -1
+    session_id: str,
+    background: BackgroundTasks,
+    since: int = -1,
+    trades_since: int = -1,
 ) -> dict:
     sess = _get(session_id)
     async with _lock(session_id):
-        snapshot = _snapshot(sess, time.monotonic(), since)
+        snapshot = _snapshot(sess, time.monotonic(), since, trades_since)
     # 등장 대기분이 마르기 전에 다음 배치를 채운다. 게임 플로우는 막지 않는다.
     if _pending_count(sess, snapshot["tick"]) <= config.NEWS_REFILL_THRESHOLD:
         background.add_task(_refill, sess, config.NEWS_BATCH_SIZE)
@@ -262,6 +335,13 @@ async def trade(body: TradeBody) -> dict:
             result = action(sess, body.symbol, body.qty, now)
         except TradeError as error:
             raise _fail(error) from error
+        value = result["gross"] if body.side == "buy" else -result["gross"]
+        rules.record_fill(sess, _tick_of(sess, now), "you", {
+            "side": result["side"], "symbol": result["symbol"],
+            "qty": result["qty"], "price": result["price"], "value": value,
+        })
+        # 플레이어의 주문도 가격을 민다. 큰 주문일수록 불리하게 체결된다.
+        engine.add_flow(sess.prices, result["symbol"], value)
         result["cash"] = sess.cash
         result["equity"] = rules.equity(sess)
         return result

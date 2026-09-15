@@ -1,39 +1,46 @@
 import { describe, expect, it } from 'vitest'
-import { baseSnapshot, capturedAnalyze, capturedTrade, sampleNews } from '../mocks/fixtures'
-import { applyBuy, emptyPosition } from '../lib/money'
 import {
-  HISTORY_LIMIT, appendHistory, applyGrindToSnapshot, applyTradeToSnapshot,
-  attachAnalysis, isFresher, maxNewsId, positionRows, upsertNews,
+  baseSnapshot, capturedAnalyze, capturedCompanyAnalysis, capturedTrade, sampleNews,
+} from '../mocks/fixtures'
+import {
+  applyCompanyAnalysisToSnapshot, applyGrindToSnapshot, applyTradeToSnapshot,
+  attachAnalysis, isFresher, maxNewsId, positionRows, priceSeries, upsertNews,
 } from './merge'
 
-describe('가격 이력', () => {
-  it('같은 tick 이 두 번 와도 한 번만 쌓인다', () => {
-    const snap = baseSnapshot({ tick: 5 })
-    const once = appendHistory({}, snap)
-    const twice = appendHistory(once, snap)
-    expect(once['hanbit']).toHaveLength(1)
-    expect(twice['hanbit']).toHaveLength(1)
+describe('가격 이력 — 서버가 준 배열에 tick 좌표를 입힌다', () => {
+  const stock = (history: number[], price: number) => ({
+    symbol: 'hanbit' as const, name: '한빛솔리드', sector: '반도체',
+    price, change_pct: 0, held: 0, fundamentals_analyzed: false,
+    avg_cost: null, history,
   })
 
-  it('바뀐 것이 없으면 같은 객체를 돌려준다 — 헛 리렌더를 막는다', () => {
-    const snap = baseSnapshot({ tick: 5 })
-    const once = appendHistory({}, snap)
-    expect(appendHistory(once, snap)).toBe(once)
+  it('마지막 값이 현재 tick 이다', () => {
+    const series = priceSeries(stock([100, 101, 102], 102), 42)
+    expect(series[series.length - 1]).toEqual({ tick: 42, price: 102 })
   })
 
-  it('tick 이 오르면 쌓인다', () => {
-    let h = appendHistory({}, baseSnapshot({ tick: 1 }))
-    h = appendHistory(h, baseSnapshot({ tick: 2 }))
-    expect(h['hanbit']).toHaveLength(2)
+  it('오래된 것이 앞이고 tick 이 1씩 거슬러 올라간다', () => {
+    expect(priceSeries(stock([100, 101, 102], 102), 42)).toEqual([
+      { tick: 40, price: 100 },
+      { tick: 41, price: 101 },
+      { tick: 42, price: 102 },
+    ])
   })
 
-  it('60틱을 넘으면 오래된 것을 버린다', () => {
-    let h: ReturnType<typeof appendHistory> = {}
-    for (let t = 0; t < HISTORY_LIMIT + 15; t++) {
-      h = appendHistory(h, baseSnapshot({ tick: t }))
-    }
-    expect(h['hanbit']).toHaveLength(HISTORY_LIMIT)
-    expect(h['hanbit']?.[0]?.tick).toBe(15)
+  it('tick 0 에 이력이 비어 있어도 깨지지 않는다', () => {
+    expect(priceSeries(stock([], 82_000), 0)).toEqual([])
+  })
+
+  it('한 점만 있어도 그 점의 tick 은 현재다', () => {
+    expect(priceSeries(stock([82_000], 82_000), 7)).toEqual([{ tick: 7, price: 82_000 }])
+  })
+
+  it('60틱이 꽉 차면 가장 오래된 것이 tick-59 다', () => {
+    const sixty = Array.from({ length: 60 }, (_, i) => 1000 + i)
+    const series = priceSeries(stock(sixty, 1059), 200)
+    expect(series).toHaveLength(60)
+    expect(series[0]).toEqual({ tick: 141, price: 1000 })
+    expect(series[59]).toEqual({ tick: 200, price: 1059 })
   })
 })
 
@@ -115,30 +122,28 @@ describe('시퀀스 가드', () => {
 })
 
 describe('보유 행', () => {
-  it('보유가 없는 종목은 빠진다', () => {
-    expect(positionRows(baseSnapshot(), {})).toEqual([])
-  })
-
-  it('held 는 있는데 평단이 없으면 손익이 null 이다 — 새로고침 후', () => {
-    const snap = baseSnapshot({
-      stocks: baseSnapshot().stocks.map((s) => (s.symbol === 'geno' ? { ...s, held: 3 } : s)),
-    })
-    const rows = positionRows(snap, {})
-    expect(rows).toHaveLength(1)
-    expect(rows[0]?.avg).toBeNull()
-    expect(rows[0]?.unrealized).toBeNull()
-  })
-
-  it('평단을 알면 손익을 계산한다', () => {
-    const snap = baseSnapshot({
+  const withGeno = (patch: Record<string, unknown>) =>
+    baseSnapshot({
       stocks: baseSnapshot().stocks.map((s) =>
-        s.symbol === 'geno' ? { ...s, held: 3, price: 50_000 } : s,
+        s.symbol === 'geno' ? { ...s, ...patch } : s,
       ),
     })
-    const positions = { geno: applyBuy(emptyPosition(), 45_000, 3) } // avg 45090
-    const rows = positionRows(snap, positions)
+
+  it('보유가 없는 종목은 빠진다', () => {
+    expect(positionRows(baseSnapshot())).toEqual([])
+  })
+
+  it('서버가 준 avg_cost 를 그대로 쓴다', () => {
+    const rows = positionRows(withGeno({ held: 3, price: 50_000, avg_cost: 45_090 }))
+    expect(rows).toHaveLength(1)
     expect(rows[0]?.avg).toBe(45_090)
     expect(rows[0]?.unrealized).toBe((50_000 - 45_090) * 3)
+  })
+
+  it('avg_cost 가 null 이면 손익도 null 이다', () => {
+    const rows = positionRows(withGeno({ held: 3, price: 50_000, avg_cost: null }))
+    expect(rows[0]?.avg).toBeNull()
+    expect(rows[0]?.unrealized).toBeNull()
   })
 })
 
@@ -158,5 +163,24 @@ describe('액션 응답 반영', () => {
     expect(next.locked).toBe(true)
     expect(next.lock_remaining).toBe(120)
     expect(next.grind_count).toBe(1)
+  })
+})
+
+describe('기업분석 반영', () => {
+  it('잔여 횟수를 응답대로 쓴다', () => {
+    const next = applyCompanyAnalysisToSnapshot(baseSnapshot(), capturedCompanyAnalysis)
+    expect(next.company_analyses_left).toBe(1)
+  })
+
+  it('그 종목만 분석됨으로 표시한다', () => {
+    const next = applyCompanyAnalysisToSnapshot(baseSnapshot(), capturedCompanyAnalysis)
+    expect(next.stocks.find((s) => s.symbol === 'geno')?.fundamentals_analyzed).toBe(true)
+    expect(next.stocks.find((s) => s.symbol === 'hanbit')?.fundamentals_analyzed).toBe(false)
+  })
+
+  it('같은 종목을 다시 사면 서버가 횟수를 안 깎는다 — 응답을 그대로 믿는다', () => {
+    const once = applyCompanyAnalysisToSnapshot(baseSnapshot(), capturedCompanyAnalysis)
+    const twice = applyCompanyAnalysisToSnapshot(once, capturedCompanyAnalysis)
+    expect(twice.company_analyses_left).toBe(1)
   })
 })

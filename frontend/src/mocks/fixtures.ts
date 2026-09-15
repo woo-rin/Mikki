@@ -1,16 +1,18 @@
-import type { AnalyzeResult, NewsItem, Snapshot, Stock, TradeResult } from '../api/types'
+import type {
+  AnalyzeResult, CompanyAnalysisResult, NewsItem, Snapshot, Stock, TradeResult,
+} from '../api/types'
 
 /**
  * 테스트용 고정값이다. 실제 시작가는 판마다 달라지므로
  * 이 숫자를 "그 종목의 시작가" 로 읽으면 안 된다.
  */
 export const SYMBOLS: Stock[] = [
-  { symbol: 'hanbit', name: '한빛솔리드', sector: '반도체', price: 82_000, change_pct: 0, held: 0 },
-  { symbol: 'geno', name: '제노셀', sector: '바이오', price: 45_000, change_pct: 0, held: 0 },
-  { symbol: 'sungjin', name: '성진셀즈', sector: '2차전지', price: 61_000, change_pct: 0, held: 0 },
-  { symbol: 'pixel', name: '픽셀로그', sector: '게임', price: 33_000, change_pct: 0, held: 0 },
-  { symbol: 'taesan', name: '태산건영', sector: '건설', price: 18_500, change_pct: 0, held: 0 },
-  { symbol: 'arawings', name: '아라윙스', sector: '항공', price: 24_000, change_pct: 0, held: 0 },
+  { symbol: 'hanbit', name: '한빛솔리드', sector: '반도체', price: 82_000, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [], avg_cost: null },
+  { symbol: 'geno', name: '제노셀', sector: '바이오', price: 45_000, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [], avg_cost: null },
+  { symbol: 'sungjin', name: '성진셀즈', sector: '2차전지', price: 61_000, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [], avg_cost: null },
+  { symbol: 'pixel', name: '픽셀로그', sector: '게임', price: 33_000, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [], avg_cost: null },
+  { symbol: 'taesan', name: '태산건영', sector: '건설', price: 18_500, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [], avg_cost: null },
+  { symbol: 'arawings', name: '아라윙스', sector: '항공', price: 24_000, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [], avg_cost: null },
 ]
 
 export function baseSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
@@ -23,6 +25,7 @@ export function baseSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     target: 3_000_000,
     round_start_equity: 1_000_000,
     analyses_left: 5,
+    company_analyses_left: 2,
     bankrupt: false,
     locked: false,
     lock_remaining: 0,
@@ -67,4 +70,48 @@ export const capturedAnalyze: AnalyzeResult = {
   already_priced_in: true,
   offline: true,
   analyses_left: 4,
+}
+
+/** api.md §3 의 실제 캡처 */
+export const capturedCompanyAnalysis: CompanyAnalysisResult = {
+  symbol: 'geno',
+  name: '제노셀',
+  fair_value: 39_216,
+  current_price: 47_909,
+  gap_pct: 22.2,
+  valuation: 'overvalued',
+  label: '고평가',
+  financials: {
+    quarter: '2024Q1',
+    revenue: 81_200_000_000,
+    operating_income: 16_500_000_000,
+    net_income: 12_800_000_000,
+    eps: 1032,
+    per: 46.4,
+    debt_ratio: 40.0,
+  },
+  commentary: '제노셀 은 바이오 섹터 기준 배수를 웃돈다. 판정: 고평가. …',
+  offline: true,
+  company_analyses_left: 1,
+}
+
+/** 적자 분기. per 이 null 이고 적정가는 PSR 로 냈다. */
+export const capturedLossQuarter: CompanyAnalysisResult = {
+  ...capturedCompanyAnalysis,
+  fair_value: 52_000,
+  current_price: 39_000,
+  gap_pct: -25.0,
+  valuation: 'severely_undervalued',
+  label: '심각한 저평가',
+  financials: {
+    quarter: '2024Q3',
+    revenue: 74_500_000_000,
+    operating_income: -3_100_000_000,
+    net_income: -2_400_000_000,
+    eps: -193,
+    per: null,
+    debt_ratio: 52.8,
+  },
+  commentary: '체력 대비 주가가 크게 눌려 있다. 판정: 심각한 저평가. …',
+  company_analyses_left: 0,
 }

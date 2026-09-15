@@ -1,5 +1,7 @@
 import { getJson, postJson } from './client'
-import type { AnalyzeResult, GrindResult, Snapshot, Symbol_, TradeResult } from './types'
+import type {
+  AnalyzeResult, CompanyAnalysisResult, GrindResult, Snapshot, Symbol_, TradeResult,
+} from './types'
 
 export function newGame(): Promise<Snapshot> {
   return postJson<Snapshot>('/api/game', {})
@@ -22,6 +24,20 @@ export function trade(
 
 export function analyze(sessionId: string, newsId: number): Promise<AnalyzeResult> {
   return postJson<AnalyzeResult>('/api/analyze', { session_id: sessionId, news_id: newsId })
+}
+
+/**
+ * 라운드당 2회. 같은 종목을 다시 부르면 서버가 횟수를 깎지 않는다 —
+ * 재무는 라운드 내내 바뀌지 않으므로 같은 값을 두 번 파는 것은 함정이기 때문이다.
+ */
+export function companyAnalysis(
+  sessionId: string,
+  symbol: Symbol_,
+): Promise<CompanyAnalysisResult> {
+  return postJson<CompanyAnalysisResult>('/api/company-analysis', {
+    session_id: sessionId,
+    symbol,
+  })
 }
 
 export function grind(sessionId: string): Promise<GrindResult> {

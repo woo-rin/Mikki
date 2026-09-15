@@ -1,10 +1,9 @@
 import type {
-  AnalyzeResult, GrindResult, NewsItem, Snapshot, Strength, Symbol_, TradeResult,
+  AnalyzeResult, CompanyAnalysisResult, GrindResult, NewsItem, Snapshot, Stock, Strength,
+  Symbol_, TradeResult,
 } from '../api/types'
 import { publishTick as toPublishTick, rampEndTick } from '../lib/derive'
-import { type Position, unrealizedFor } from '../lib/money'
-
-export const HISTORY_LIMIT = 60
+import { unrealized } from '../lib/money'
 
 export interface PricePoint {
   tick: number
@@ -43,23 +42,15 @@ export interface PositionRow {
   unrealized: number | null
 }
 
-/** 같은 tick 이 두 번 오면 아무것도 하지 않고 같은 객체를 돌려준다. */
-export function appendHistory(
-  prev: Record<string, PricePoint[]>,
-  snap: Snapshot,
-): Record<string, PricePoint[]> {
-  let changed = false
-  const next: Record<string, PricePoint[]> = { ...prev }
-
-  for (const stock of snap.stocks) {
-    const series = prev[stock.symbol] ?? []
-    if (series[series.length - 1]?.tick === snap.tick) continue
-    const grown = [...series, { tick: snap.tick, price: stock.price }]
-    next[stock.symbol] = grown.length > HISTORY_LIMIT ? grown.slice(-HISTORY_LIMIT) : grown
-    changed = true
-  }
-
-  return changed ? next : prev
+/**
+ * 서버가 주는 history 는 가격만 있고 tick 이 없다. 마지막 값이 현재 tick 이므로
+ * 거기서 거슬러 올라가며 좌표를 입힌다.
+ *
+ * 뉴스 마커와 램프 밴드가 tick 으로 배치되므로 이 변환 없이는 마커가 엉뚱한 데 붙는다.
+ */
+export function priceSeries(stock: Stock, tick: number): PricePoint[] {
+  const n = stock.history.length
+  return stock.history.map((price, i) => ({ tick: tick - (n - 1 - i), price }))
 }
 
 function toFeedItem(n: NewsItem, snapshotTick: number, prior: FeedItem | undefined): FeedItem {
@@ -118,24 +109,17 @@ export function isFresher(lastSeq: number, seq: number): boolean {
   return seq > lastSeq
 }
 
-export function positionRows(
-  snap: Snapshot,
-  positions: Record<string, Position>,
-): PositionRow[] {
+export function positionRows(snap: Snapshot): PositionRow[] {
   return snap.stocks
     .filter((s) => s.held > 0)
-    .map((s) => {
-      const pos = positions[s.symbol]
-      const known = pos !== undefined && pos.qty === s.held && pos.avg !== 0
-      return {
-        symbol: s.symbol,
-        name: s.name,
-        held: s.held,
-        price: s.price,
-        avg: known ? (pos?.avg ?? null) : null,
-        unrealized: unrealizedFor(pos, s.held, s.price),
-      }
-    })
+    .map((s) => ({
+      symbol: s.symbol,
+      name: s.name,
+      held: s.held,
+      price: s.price,
+      avg: s.avg_cost,
+      unrealized: unrealized(s.avg_cost, s.price, s.held),
+    }))
 }
 
 export function applyTradeToSnapshot(snap: Snapshot, res: TradeResult): Snapshot {
@@ -144,6 +128,23 @@ export function applyTradeToSnapshot(snap: Snapshot, res: TradeResult): Snapshot
 
 export function applyAnalyzeToSnapshot(snap: Snapshot, res: AnalyzeResult): Snapshot {
   return { ...snap, analyses_left: res.analyses_left }
+}
+
+/**
+ * 잔여 횟수는 응답을 그대로 쓴다. 같은 종목을 다시 사면 서버가 깎지 않으므로
+ * 프론트가 따로 세면 어긋난다.
+ */
+export function applyCompanyAnalysisToSnapshot(
+  snap: Snapshot,
+  res: CompanyAnalysisResult,
+): Snapshot {
+  return {
+    ...snap,
+    company_analyses_left: res.company_analyses_left,
+    stocks: snap.stocks.map((s) =>
+      s.symbol === res.symbol ? { ...s, fundamentals_analyzed: true } : s,
+    ),
+  }
 }
 
 /**

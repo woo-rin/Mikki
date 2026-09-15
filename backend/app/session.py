@@ -4,9 +4,10 @@
 """
 import math
 import random
+from collections import deque
 from dataclasses import dataclass, field
 
-from app import config, engine, fundamentals
+from app import config, engine, fundamentals, participants
 from app.engine import PriceState
 from app.models import NewsItem, NewsPlan
 
@@ -26,6 +27,9 @@ class GameSession:
     prices: PriceState
     cash: int
     holdings: dict[str, int] = field(default_factory=dict)
+    # 종목별 누적 매입원가(수수료 포함). holdings 의 모양은 건드리지 않는다 —
+    # 읽는 곳이 여럿이라 파급이 크다.
+    cost_basis: dict[str, int] = field(default_factory=dict)
     round_no: int = 1
     round_start_equity: int = config.SEED_CASH
     target: int = config.SEED_CASH * config.ROUND_TARGET_MULTIPLIER
@@ -35,11 +39,25 @@ class GameSession:
     grind_count: int = 0
     grind_until: float | None = None
     pending_payout: int = 0
+    ais: list[participants.AIState] = field(default_factory=list)
+    ai_seed: int = 0
+    # 마지막으로 요청이 닿은 시각. 오래 조용하면 쓸려나간다.
+    last_seen: float = 0.0
+    trades: deque = field(default_factory=deque)
+    trade_seq: int = 0
+    # (tick, symbol, qty). 오래된 것은 prune_volume 이 버린다.
+    volume_window: deque = field(default_factory=deque)
+    volume_total: dict[str, int] = field(default_factory=dict)
     plans: list[NewsPlan] = field(default_factory=list)
     news: list[NewsItem] = field(default_factory=list)
 
 
-def new_session(session_id: str, rng: random.Random, started_at: float) -> GameSession:
+def new_session(
+    session_id: str,
+    rng: random.Random,
+    started_at: float,
+    ai_count: int = config.AI_COUNT_DEFAULT,
+) -> GameSession:
     return GameSession(
         session_id=session_id,
         rng=rng,
@@ -48,6 +66,12 @@ def new_session(session_id: str, rng: random.Random, started_at: float) -> GameS
         cash=config.SEED_CASH,
         round_start_equity=config.SEED_CASH,
         target=config.SEED_CASH * config.ROUND_TARGET_MULTIPLIER,
+        last_seen=started_at,
+        ais=participants.new_participants(ai_count),
+        # AI 판단용 시드. engine 의 rng 와 섞지 않는다.
+        ai_seed=rng.randrange(2**31),
+        volume_total={symbol: 0 for symbol in config.STOCKS},
+        trades=deque(maxlen=config.TRADES_MAX),
     )
 
 
@@ -95,6 +119,8 @@ def buy(sess: GameSession, symbol: str, qty: int, now: float) -> dict:
         raise TradeError("insufficient_cash", "현금이 부족합니다.")
     sess.cash -= gross + fee
     sess.holdings[symbol] = sess.holdings.get(symbol, 0) + qty
+    # 수수료를 원가에 넣는다. 빼면 평가손익이 실제보다 좋아 보인다.
+    sess.cost_basis[symbol] = sess.cost_basis.get(symbol, 0) + gross + fee
     return {"side": "buy", "symbol": symbol, "qty": qty,
             "price": price, "gross": gross, "fee": fee}
 
@@ -112,10 +138,25 @@ def sell(sess: GameSession, symbol: str, qty: int, now: float) -> dict:
     sess.cash += gross - fee
     if held == qty:
         del sess.holdings[symbol]
+        sess.cost_basis.pop(symbol, None)
     else:
         sess.holdings[symbol] = held - qty
+        # 판 만큼만 원가에서 덜어낸다. 남은 주식의 취득 단가는 그대로다.
+        cost = sess.cost_basis.get(symbol, 0)
+        sess.cost_basis[symbol] = cost - math.floor(cost * qty / held)
     return {"side": "sell", "symbol": symbol, "qty": qty,
             "price": price, "gross": gross, "fee": fee}
+
+
+def avg_cost_of(sess: GameSession, symbol: str) -> int | None:
+    """취득 단가(수수료 포함), 내림. 안 들고 있으면 None.
+
+    0 으로 채우지 않는다 — 프론트가 그걸 평단으로 믿고 틀린 손익을 그린다.
+    """
+    qty = sess.holdings.get(symbol, 0)
+    if qty <= 0:
+        return None
+    return sess.cost_basis.get(symbol, 0) // qty
 
 
 # ------------------------------------------------------- 파산과 노가다
@@ -155,9 +196,12 @@ def start_grind(sess: GameSession, now: float) -> dict:
     # 이전 노가다의 미지급 보수를 먼저 정산한다. 잠금이 자연히 풀린 뒤 정산 없이
     # 다시 시작하면 pending_payout 이 덮어써져 미지급액이 영구히 사라진다.
     settle_grind(sess, now)
+    # 파산이 전제가 아니다 — 평소에도 누를 수 있다.
+    #
+    # 보수가 3/5 씩 줄고 120초 동안 아무것도 못 하므로, 스스로 균형이 잡힌다.
+    # 부자일 때는 그동안 놓치는 램프가 보수보다 비싸고, 가난할 때만 남는 장사다.
+    # 전부 뽑아도 라운드당 약 50만원이라 목표(3배)에는 노가다만으로 못 닿는다.
     _check_unlocked(sess, now)
-    if not is_bankrupt(sess):
-        raise TradeError("not_bankrupt", "파산 상태에서만 노가다를 할 수 있습니다.")
     payout = grind_payout(sess.grind_count)
     sess.grind_until = now + config.GRIND_LOCK_SECONDS
     sess.pending_payout = payout
@@ -221,3 +265,67 @@ def advance_round(sess: GameSession) -> None:
     # 새 분기 실적이 적정가를 옮긴다. 지난 라운드에 산 정보가 낡는다.
     # 가격은 건드리지 않는다 — 점프하면 보유 종목 평가액이 순간이동한다.
     engine.reanchor(sess.prices, fundamentals.fair_values(sess.round_no))
+
+
+# --------------------------------------------------- 체결 피드와 거래량
+
+def record_fill(sess: GameSession, tick: int, actor: str, fill: dict) -> None:
+    """체결 하나를 피드와 거래량 창에 남긴다.
+
+    fill 의 value 는 가격 영향 계산용 내부 값이라 피드에 싣지 않는다.
+    """
+    sess.trade_seq += 1
+    sess.trades.append({
+        "seq": sess.trade_seq,
+        "tick": tick,
+        "actor": actor,
+        "symbol": fill["symbol"],
+        "name": config.STOCKS[fill["symbol"]].name,
+        "side": fill["side"],
+        "qty": fill["qty"],
+        "price": fill["price"],
+    })
+    sess.volume_window.append((tick, fill["symbol"], fill["qty"]))
+    sess.volume_total[fill["symbol"]] += fill["qty"]
+
+
+def prune_volume(sess: GameSession, tick: int) -> None:
+    cutoff = tick - config.VOLUME_WINDOW_TICKS
+    while sess.volume_window and sess.volume_window[0][0] < cutoff:
+        sess.volume_window.popleft()
+
+
+def volume_of(sess: GameSession, symbol: str) -> int:
+    return sum(qty for _, sym, qty in sess.volume_window if sym == symbol)
+
+
+def volume_avg_of(sess: GameSession, symbol: str, tick: int) -> int:
+    """그때까지의 구간 평균. 프론트가 "평소의 5배" 를 계산하는 기준이다."""
+    window = config.VOLUME_WINDOW_TICKS
+    return round(sess.volume_total[symbol] * window / max(tick, window))
+
+
+def ai_rows(sess: GameSession) -> list[dict]:
+    """리더보드. 보유 종목은 싣지 않는다 — 체결 피드로 재구성하는 것이 정당한 우위다.
+
+    순위는 총자산 기준이다. 목표 판정이 현금으로 바뀌는 것은 D 와 함께 온다.
+    동점은 명단 순서로 가른다 — 임의로 흔들리면 매 폴링마다 리더보드가 요동친다.
+    """
+    def price(symbol: str) -> int:
+        return engine.price_of(sess.prices, symbol)
+
+    scored = [
+        (index, ai, participants.equity_of(ai, price))
+        for index, ai in enumerate(sess.ais)
+    ]
+    scored.sort(key=lambda row: (-row[2], row[0]))
+    return [
+        {
+            "id": ai.profile.id,
+            "name": ai.profile.name,
+            "cash": ai.cash,
+            "equity": total,
+            "rank": rank,
+        }
+        for rank, (_, ai, total) in enumerate(scored, start=1)
+    ]

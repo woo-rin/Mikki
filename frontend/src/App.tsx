@@ -4,38 +4,56 @@ import { GrindPanel } from './components/account/GrindPanel'
 import { Positions } from './components/account/Positions'
 import { RoundPanel } from './components/account/RoundPanel'
 import { PriceChart } from './components/chart/PriceChart'
+import { FundamentalsPanel } from './components/fundamentals/FundamentalsPanel'
 import { NewsFeed } from './components/news/NewsFeed'
 import { OrderTicket } from './components/order/OrderTicket'
 import { ConnectionBanner } from './components/system/ConnectionBanner'
 import { SessionGate } from './components/system/SessionGate'
+import { Tabs } from './components/system/Tabs'
 import { Toasts } from './components/system/Toasts'
-import { Watchlist } from './components/watchlist/Watchlist'
+import { TopBar } from './components/system/TopBar'
+import { TickerBar } from './components/watchlist/TickerBar'
 import { useGameLoop } from './hooks/useGameLoop'
 import { useGameStore } from './store/gameStore'
+import { useUiStore } from './store/uiStore'
 
-function Board() {
+/** 좌측은 한 번에 하나만 본다. */
+function TabPane({ bankrupt }: { bankrupt: boolean }) {
+  const tab = useUiStore((s) => s.tab)
+  if (tab === 'fundamentals') return <FundamentalsPanel />
+  if (tab === 'positions') {
+    return (
+      <>
+        <AccountPanel />
+        <RoundPanel />
+        <Positions />
+        {/* 평소에는 여기 조용히 있는다. 파산하면 우측으로 끌려 나간다. */}
+        {!bankrupt && <GrindPanel />}
+      </>
+    )
+  }
+  return <NewsFeed />
+}
+
+export function Board() {
+  // 폴링이 시장을 굴린다. 껍데기에 두어야 탭을 옮겨도 안 멈춘다.
   useGameLoop()
-  const snap = useGameStore((s) => s.snapshot)
+  const bankrupt = useGameStore((s) => s.snapshot?.bankrupt ?? false)
 
   return (
     <div className="board">
-      <header className="topbar">
-        <strong>미끼</strong>
-        <span className="num">{`R${snap?.round_no ?? 1}`}</span>
-        <span className="num">{`${snap?.tick ?? 0}s`}</span>
-      </header>
+      <TopBar />
+      <TickerBar />
       <div className="cols">
         <aside className="left">
-          <AccountPanel />
-          <RoundPanel />
-          <GrindPanel />
-          <Positions />
-          <OrderTicket />
-          <NewsFeed />
+          <Tabs />
+          <TabPane bankrupt={bankrupt} />
         </aside>
         <main className="right">
           <PriceChart />
-          <Watchlist />
+          {/* 파산하면 주문 자리를 노가다가 대체한다. 어차피 주문을 못 하고,
+              탭에 묻히면 복귀 수단을 못 찾는다. */}
+          {bankrupt ? <GrindPanel /> : <OrderTicket />}
         </main>
       </div>
     </div>

@@ -12,22 +12,26 @@ beforeEach(() => {
   useUiStore.getState().select('pixel')
 })
 
+/** 서버가 history 를 들고 있다. n틱이 지난 상태의 스냅샷 하나를 만든다. */
 function feedTicks(n: number) {
-  for (let t = 0; t < n; t++) {
-    const snap = baseSnapshot({
-      tick: t,
-      news: t === 1 ? [sampleNews({ symbol: 'pixel', age_seconds: 0 })] : [],
-      stocks: baseSnapshot().stocks.map((s) =>
-        s.symbol === 'pixel' ? { ...s, price: 33_000 + t * 100 } : s,
-      ),
-    })
-    useGameStore.getState().applySnapshot(snap, t + 1)
-    useDerivedStore.getState().record(snap)
-  }
+  const prices = Array.from({ length: n }, (_, t) => 33_000 + t * 100)
+  const tick = n - 1
+  const snap = baseSnapshot({
+    tick,
+    // publishTick = tick - age_seconds = 1
+    news: [sampleNews({ symbol: 'pixel', age_seconds: tick - 1 })],
+    stocks: baseSnapshot().stocks.map((s) =>
+      s.symbol === 'pixel'
+        ? { ...s, price: prices[n - 1] ?? 33_000, history: prices }
+        : s,
+    ),
+  })
+  useGameStore.getState().applySnapshot(snap, 1)
+  useDerivedStore.getState().record(snap)
 }
 
 describe('가격 차트', () => {
-  it('이력이 없으면 쌓는 중이라고 말한다', () => {
+  it('첫 tick 전에는 그릴 것이 없다고 말한다', () => {
     useGameStore.getState().applySnapshot(baseSnapshot(), 1)
     render(<PriceChart />)
     expect(screen.getByText('이력을 쌓는 중…')).toBeInTheDocument()

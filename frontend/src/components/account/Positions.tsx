@@ -1,14 +1,12 @@
 import { signedWon, won } from '../../lib/format'
-import { useDerivedStore } from '../../store/derivedStore'
 import { useGameStore } from '../../store/gameStore'
 import { positionRows } from '../../store/merge'
 
 export function Positions() {
   const snap = useGameStore((s) => s.snapshot)
-  const positions = useDerivedStore((s) => s.positions)
   if (!snap) return null
 
-  const rows = positionRows(snap, positions)
+  const rows = positionRows(snap)
   if (rows.length === 0) {
     return (
       <section className="panel">
@@ -42,9 +40,6 @@ export function Positions() {
           ))}
         </tbody>
       </table>
-      {rows.some((r) => r.avg === null) && (
-        <p className="hint">평단은 체결 기록에서 나옵니다. 새로고침하면 사라집니다.</p>
-      )}
     </section>
   )
 }

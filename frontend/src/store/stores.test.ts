@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { baseSnapshot, capturedAnalyze, capturedTrade, sampleNews } from '../mocks/fixtures'
+import {
+  baseSnapshot, capturedAnalyze, capturedCompanyAnalysis, capturedTrade, sampleNews,
+} from '../mocks/fixtures'
 import { useDerivedStore } from './derivedStore'
 import { useGameStore } from './gameStore'
 import { useUiStore } from './uiStore'
@@ -40,6 +42,13 @@ describe('gameStore', () => {
     expect(snap?.locked).toBe(true)
   })
 
+  it('기업분석 응답이 즉시 잔여 횟수에 반영된다', () => {
+    const g = useGameStore.getState()
+    g.applySnapshot(baseSnapshot(), 1)
+    g.applyCompanyAnalysis(capturedCompanyAnalysis)
+    expect(useGameStore.getState().snapshot?.company_analyses_left).toBe(1)
+  })
+
   it('forceSnapshot 은 시퀀스를 건드리지 않아 이후 폴링이 계속 먹힌다', () => {
     const g = useGameStore.getState()
     g.applySnapshot(baseSnapshot({ tick: 1 }), 1)
@@ -51,28 +60,14 @@ describe('gameStore', () => {
 })
 
 describe('derivedStore', () => {
-  it('스냅샷에서 이력과 뉴스를 쌓는다', () => {
+  it('스냅샷에서 뉴스를 쌓는다 — 가격 이력은 서버가 들고 있다', () => {
     const d = useDerivedStore.getState()
     d.record(baseSnapshot({ tick: 1, news: [sampleNews()] }))
     d.record(baseSnapshot({ tick: 2 }))
-    const s = useDerivedStore.getState()
-    expect(s.history['hanbit']).toHaveLength(2)
-    expect(s.feed).toHaveLength(1)
-  })
-
-  it('체결로만 평단이 생긴다', () => {
-    const d = useDerivedStore.getState()
-    d.recordFill(capturedTrade) // buy geno 2 @ 44618, fee 178
-    const pos = useDerivedStore.getState().positions['geno']
-    expect(pos?.qty).toBe(2)
-    expect(pos?.avg).toBe(Math.floor((44_618 * 2 + 178) / 2))
-  })
-
-  it('매도가 수량을 줄인다', () => {
-    const d = useDerivedStore.getState()
-    d.recordFill(capturedTrade)
-    useDerivedStore.getState().recordFill({ ...capturedTrade, side: 'sell', qty: 2 })
-    expect(useDerivedStore.getState().positions['geno']?.qty).toBe(0)
+    expect(useDerivedStore.getState().feed).toHaveLength(1)
+    // 가격 이력과 평단은 서버가 들고 있다 — 여기 없는 것이 맞다
+    expect('history' in useDerivedStore.getState()).toBe(false)
+    expect('positions' in useDerivedStore.getState()).toBe(false)
   })
 
   it('분석 결과가 피드에 붙는다', () => {
@@ -80,6 +75,29 @@ describe('derivedStore', () => {
     d.record(baseSnapshot({ tick: 300, news: [sampleNews()] }))
     useDerivedStore.getState().recordAnalysis(capturedAnalyze, 300)
     expect(useDerivedStore.getState().feed[0]?.analysis?.label).toBe('무영향')
+  })
+})
+
+describe('기업분석 보관', () => {
+  it('종목별로 보관한다', () => {
+    useDerivedStore.getState().record(baseSnapshot({ round_no: 1 }))
+    useDerivedStore.getState().recordValuation(capturedCompanyAnalysis)
+    expect(useDerivedStore.getState().valuations['geno']?.label).toBe('고평가')
+    expect(useDerivedStore.getState().valuations['hanbit']).toBeUndefined()
+  })
+
+  it('같은 라운드에서는 유지된다', () => {
+    useDerivedStore.getState().record(baseSnapshot({ round_no: 1, tick: 1 }))
+    useDerivedStore.getState().recordValuation(capturedCompanyAnalysis)
+    useDerivedStore.getState().record(baseSnapshot({ round_no: 1, tick: 2 }))
+    expect(useDerivedStore.getState().valuations['geno']).toBeDefined()
+  })
+
+  it('라운드가 바뀌면 비운다 — 적정가가 분기마다 움직인다', () => {
+    useDerivedStore.getState().record(baseSnapshot({ round_no: 1 }))
+    useDerivedStore.getState().recordValuation(capturedCompanyAnalysis)
+    useDerivedStore.getState().record(baseSnapshot({ round_no: 2 }))
+    expect(useDerivedStore.getState().valuations).toEqual({})
   })
 })
 

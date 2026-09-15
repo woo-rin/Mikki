@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { baseSnapshot, capturedTrade } from '../../mocks/fixtures'
+import { baseSnapshot, sampleNews } from '../../mocks/fixtures'
 import { useDerivedStore } from '../../store/derivedStore'
 import { useGameStore } from '../../store/gameStore'
 import { RoundPanel } from './RoundPanel'
@@ -42,16 +42,14 @@ describe('라운드 전환', () => {
     expect(useGameStore.getState().snapshot?.tick).toBe(99)
   })
 
-  it('라운드가 바뀌어도 가격 이력과 평단은 남는다', async () => {
-    const snap = baseSnapshot({ goal_reached: true, tick: 7 })
+  it('라운드가 바뀌어도 뉴스 피드는 남는다', async () => {
+    const snap = baseSnapshot({ goal_reached: true, tick: 7, news: [sampleNews()] })
     useGameStore.getState().applySnapshot(snap, 1)
     useDerivedStore.getState().record(snap)
-    useDerivedStore.getState().recordFill(capturedTrade)
     render(<RoundPanel />)
     await userEvent.click(screen.getByRole('button', { name: '다음 라운드' }))
     await waitFor(() => expect(useGameStore.getState().snapshot?.round_no).toBe(2))
 
-    expect(useDerivedStore.getState().history['hanbit']?.length).toBeGreaterThan(0)
-    expect(useDerivedStore.getState().positions['geno']?.qty).toBe(2)
+    expect(useDerivedStore.getState().feed).toHaveLength(1)
   })
 })

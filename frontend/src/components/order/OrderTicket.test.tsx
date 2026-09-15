@@ -41,7 +41,6 @@ describe('주문 티켓', () => {
 
     await screen.findByRole('alert')
     expect(useGameStore.getState().snapshot?.cash).toBe(capturedTrade.cash)
-    expect(useDerivedStore.getState().positions['geno']?.qty).toBe(2)
     // 표시가 45,000 과 체결가 44,618 의 차이를 알린다
     expect(screen.getByRole('alert')).toHaveTextContent('44,618원')
   })

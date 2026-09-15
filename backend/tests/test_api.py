@@ -7,9 +7,10 @@ from fastapi.testclient import TestClient
 from app import config, fundamentals
 from app.main import _refilling, app, sessions
 
-# 뉴스는 12~18초 간격으로 등장하므로 tick 0 에는 아직 한 건도 보이지 않는다.
+# 뉴스는 약 30초 간격으로 등장하므로 tick 0 에는 아직 한 건도 보이지 않는다.
 # 뉴스가 필요한 테스트는 started_at 을 과거로 밀어 시간을 흐르게 만든다.
-ELAPSED = 120
+# 분석 5회를 소진하는 테스트가 있으므로 기사 5건이 확실히 나올 만큼 흘려보낸다.
+ELAPSED = 240
 
 
 @pytest.fixture(autouse=True)
@@ -183,11 +184,25 @@ def test_analyze_unknown_news_returns_404(client):
     assert response.status_code == 404
 
 
-def test_grind_requires_bankruptcy(client):
+def test_grind_is_open_without_bankruptcy(client):
+    """평소에도 누를 수 있다. 파산은 더 이상 전제가 아니다."""
     sid = start(client)["session_id"]
     response = client.post("/api/grind", json={"session_id": sid})
-    assert response.status_code == 400
-    assert response.json()["detail"]["code"] == "not_bankrupt"
+    assert response.status_code == 200
+    body = response.json()
+    assert body["payout"] > 0
+    assert body["grind_count"] == 1
+    assert body["lock_remaining"] > 0
+
+
+def test_grind_still_locks_out_trading(client):
+    """상시로 열렸어도 잠금은 그대로다 — 이게 노가다의 값이다."""
+    sid = start(client)["session_id"]
+    client.post("/api/grind", json={"session_id": sid})
+    response = client.post("/api/trade", json={"session_id": sid, "symbol": "geno",
+                                               "side": "buy", "qty": 1})
+    assert response.status_code == 423
+    assert response.json()["detail"]["code"] == "locked"
 
 
 def test_grind_locks_trading_and_state_reports_it(client):
@@ -308,9 +323,14 @@ def test_ramp_remaining_is_measured_after_the_call_returns(client, monkeypatch):
 
     # 고른 기사의 램프가 막 시작된 시점으로 시계를 맞춘다. 어떤 기사가 마침
     # 램프 중이었는지에 기대지 않도록 결정론적으로 세운다.
+    #
+    # tick 은 TICK_QUANTUM 의 배수로 내림되므로, 공개 시각 바로 다음 양자에
+    # 맞춘다. publish_tick + 1 로 잡으면 내림되어 아직 공개 전이 될 수 있다.
     item = sess.news[0]
     ramp_end = item.plan.publish_tick + item.plan.ramp_seconds
-    sess.started_at = _time.monotonic() - (item.plan.publish_tick + 1)
+    q = config.TICK_QUANTUM
+    target_tick = (item.plan.publish_tick // q + 1) * q
+    sess.started_at = _time.monotonic() - target_tick
 
     pre_tick = state(client, sid)["tick"]
     assert pre_tick < ramp_end, "설정이 틀렸다 — 호출 전에 이미 램프가 끝났다"
@@ -446,3 +466,202 @@ def test_company_analysis_rejects_a_dead_session(client):
     response = analyze_company(client, "없는세션", "geno")
     assert response.status_code == 404
     assert response.json()["detail"]["code"] == "no_session"
+
+
+# ------------------------------------------------- 가격 이력과 평단
+
+def test_stocks_carry_no_average_cost_before_buying(client):
+    """0 이 아니라 null 이어야 한다. 0 이면 프론트가 틀린 손익을 그린다."""
+    for row in start(client)["stocks"]:
+        assert row["avg_cost"] is None
+
+
+def test_stocks_carry_the_average_cost_after_buying(client):
+    sid = start(client, ELAPSED)["session_id"]
+    client.post("/api/trade", json={"session_id": sid, "symbol": "geno",
+                                    "side": "buy", "qty": 5})
+
+    rows = {r["symbol"]: r for r in state(client, sid)["stocks"]}
+    assert rows["geno"]["avg_cost"] > 0
+    assert rows["hanbit"]["avg_cost"] is None
+
+
+def test_stocks_carry_price_history(client):
+    sid = start(client, ELAPSED)["session_id"]
+    for row in state(client, sid)["stocks"]:
+        assert isinstance(row["history"], list)
+        assert 0 < len(row["history"]) <= config.PRICE_HISTORY_TICKS
+        # 마지막 값이 현재가여야 차트와 호가가 어긋나지 않는다
+        assert row["history"][-1] == row["price"]
+
+
+def test_history_survives_a_fresh_poll(client):
+    """이게 이 작업의 목적이다 — 새로고침해도 차트가 남는다."""
+    sid = start(client, ELAPSED)["session_id"]
+    first = state(client, sid)["stocks"][0]["history"]
+    # 새 클라이언트가 처음 붙은 것과 같은 요청
+    again = state(client, sid)["stocks"][0]["history"]
+    assert len(again) >= len(first) > 1
+
+
+def test_history_never_grows_past_the_window(client):
+    sid = start(client, 600)["session_id"]        # 10분을 한 번에 따라잡는다
+    for row in state(client, sid)["stocks"]:
+        assert len(row["history"]) == config.PRICE_HISTORY_TICKS
+
+
+# ------------------------------------------------------------ AI 참가자
+
+def test_game_seats_the_default_ai_count(client):
+    body = start(client)
+    assert len(body["ai"]) == config.AI_COUNT_DEFAULT
+    assert body["trades"] == []
+
+
+def test_game_without_a_body_still_works(client):
+    """프론트가 지금 본문 없이 부르고 있다. 깨지면 안 된다."""
+    response = client.post("/api/game")
+    assert response.status_code == 200
+    assert len(response.json()["ai"]) == config.AI_COUNT_DEFAULT
+
+
+def test_game_accepts_an_ai_count(client):
+    response = client.post("/api/game", json={"ai_count": 9})
+    assert response.status_code == 200
+    assert len(response.json()["ai"]) == 9
+
+
+@pytest.mark.parametrize("count", [0, -1, 10, 100])
+def test_game_rejects_an_out_of_range_ai_count(client, count):
+    response = client.post("/api/game", json={"ai_count": count})
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "bad_ai_count"
+
+
+def test_ai_rows_carry_a_rank_and_no_holdings(client):
+    body = start(client)
+    for row in body["ai"]:
+        assert set(row) == {"id", "name", "cash", "equity", "rank"}
+    assert sorted(r["rank"] for r in body["ai"]) == list(
+        range(1, config.AI_COUNT_DEFAULT + 1)
+    )
+
+
+def test_ais_actually_trade_once_time_passes(client):
+    sid = start(client, ELAPSED)["session_id"]
+    body = state(client, sid)
+    assert body["trades"], "120초가 흘렀는데 AI 가 한 번도 안 움직였다"
+    assert all(t["actor"] != "you" for t in body["trades"])
+
+
+def test_trades_since_filters_like_since(client):
+    sid = start(client, ELAPSED)["session_id"]
+    highest = max(t["seq"] for t in state(client, sid)["trades"])
+    response = client.get(f"/api/state?session_id={sid}&trades_since={highest}")
+    assert all(t["seq"] > highest for t in response.json()["trades"])
+
+
+def test_player_trades_appear_in_the_feed(client):
+    sid = start(client, ELAPSED)["session_id"]
+    client.post("/api/trade", json={"session_id": sid, "symbol": "geno",
+                                    "side": "buy", "qty": 1})
+    mine = [t for t in state(client, sid)["trades"] if t["actor"] == "you"]
+    assert len(mine) == 1
+    assert mine[0]["side"] == "buy" and mine[0]["qty"] == 1
+
+
+def test_stocks_report_volume(client):
+    sid = start(client, ELAPSED)["session_id"]
+    for row in state(client, sid)["stocks"]:
+        assert row["volume"] >= 0
+        assert row["volume_avg"] >= 0
+
+
+def test_snapshot_never_exposes_ai_holdings(client):
+    raw = json.dumps(start(client, ELAPSED), ensure_ascii=False)
+    assert "holdings" not in raw
+    assert "cursor" not in raw
+
+
+def test_more_ais_means_more_trades(client):
+    few = client.post("/api/game", json={"ai_count": 1}).json()
+    sessions[few["session_id"]].started_at -= ELAPSED
+    many = client.post("/api/game", json={"ai_count": 9}).json()
+    sessions[many["session_id"]].started_at -= ELAPSED
+
+    quiet = len(state(client, few["session_id"])["trades"])
+    loud = len(state(client, many["session_id"])["trades"])
+    assert loud > quiet
+
+
+# ------------------------------------------ 시세 갱신 주기와 세션 수명
+
+def test_price_only_advances_on_the_quantum(client):
+    """시세는 5초에 한 번만 앞으로 간다. tick 은 5의 배수여야 한다."""
+    for elapsed in (0, 3, 5, 7, 12, 29):
+        sid = start(client, elapsed)["session_id"]
+        tick = state(client, sid)["tick"]
+        assert tick % config.TICK_QUANTUM == 0, f"{elapsed}초 → tick {tick}"
+        assert tick <= elapsed
+
+
+def test_price_is_identical_inside_one_quantum(client):
+    """같은 5초 창 안에서는 몇 번을 폴링해도 값이 같다."""
+    sid = start(client, 20)["session_id"]
+    first = state(client, sid)
+    second = state(client, sid)
+    assert first["tick"] == second["tick"]
+    assert [s["price"] for s in first["stocks"]] == [s["price"] for s in second["stocks"]]
+
+
+def test_news_comes_about_every_thirty_seconds(client):
+    """간격이 촘촘하면 읽을 틈이 없고 메모리도 빨리 찬다."""
+    lo, hi = config.NEWS_INTERVAL_RANGE
+    assert 28 <= lo <= hi <= 32
+
+    sid = start(client, 300)["session_id"]
+    ticks = sorted(300 - n["age_seconds"] for n in state(client, sid)["news"])
+    gaps = [b - a for a, b in zip(ticks, ticks[1:])]
+    assert gaps, "5분이 흘렀는데 기사가 두 건도 안 나왔다"
+    assert all(lo - config.TICK_QUANTUM <= g <= hi + config.TICK_QUANTUM for g in gaps), gaps
+
+
+def test_idle_sessions_are_swept_when_a_new_game_starts(client):
+    """세션이 영원히 쌓이면 버려진 판 100개가 100MB 를 먹는다."""
+    stale = start(client)["session_id"]
+    sessions[stale].last_seen -= config.SESSION_IDLE_SECONDS + 60
+
+    fresh_id = client.post("/api/game").json()["session_id"]
+
+    assert stale not in sessions
+    assert fresh_id in sessions
+    assert client.get(f"/api/state?session_id={stale}").status_code == 404
+
+
+def test_a_live_session_survives_the_sweep(client):
+    alive = start(client)["session_id"]
+    client.post("/api/game")
+    assert alive in sessions
+    assert client.get(f"/api/state?session_id={alive}").status_code == 200
+
+
+def test_polling_keeps_a_session_alive(client):
+    sid = start(client)["session_id"]
+    sessions[sid].last_seen -= config.SESSION_IDLE_SECONDS + 60
+    state(client, sid)                       # 폴링이 수명을 갱신한다
+    client.post("/api/game")
+    assert sid in sessions
+
+
+def test_sweeping_also_drops_the_lock_and_refill_marks(client):
+    """세션만 지우고 부속을 남기면 누수가 그대로다."""
+    import app.main as main
+    stale = start(client)["session_id"]
+    state(client, stale)                     # 락을 만든다
+    assert stale in main._locks
+    sessions[stale].last_seen -= config.SESSION_IDLE_SECONDS + 60
+
+    client.post("/api/game")
+
+    assert stale not in main._locks
+    assert stale not in main._refilling
