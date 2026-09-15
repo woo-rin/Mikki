@@ -154,30 +154,66 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 
 .worker { width: 168px; height: 140px; }
 .worker-ink { stroke: var(--ink); stroke-width: 3; stroke-linecap: round; fill: none; }
-.worker circle.worker-ink { fill: var(--ink); stroke: none; }
-.worker-tool { stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
+.worker-fill { fill: var(--ink); }
+.worker-tool { stroke: var(--accent); stroke-width: 3; stroke-linecap: round; fill: none; }
+.worker-tool-fill { fill: var(--accent); }
 .worker-ground { stroke: var(--line-strong); stroke-width: 2; }
-.worker-dust { fill: var(--ink-3); opacity: 0; }
+.dust, .toss { fill: var(--ink-3); opacity: 0; }
 
-/* 어깨를 축으로 팔과 도구가 함께 돈다. 들어올릴 때 느리고 내리칠 때 빠르다. */
-.worker-swing { transform-origin: 46px 40px; animation: swing 1.1s ease-in-out infinite; }
+/* ── 곡괭이질 ── 어깨를 축으로. 들어올릴 때 느리고 내리칠 때 빠르다. */
+.swing { transform-origin: 46px 40px; animation: swing 1.1s ease-in-out infinite; }
 @keyframes swing {
-  0%   { transform: rotate(-52deg); }
-  55%  { transform: rotate(-52deg); }
-  70%  { transform: rotate(14deg); }
-  80%  { transform: rotate(6deg); }
-  100% { transform: rotate(-52deg); }
+  0%, 55% { transform: rotate(-52deg); }
+  70%     { transform: rotate(14deg); }
+  80%     { transform: rotate(6deg); }
+  100%    { transform: rotate(-52deg); }
 }
-/* 내리친 순간에만 흙이 튄다 */
-.worker-dust { animation: dust 1.1s ease-out infinite; }
+.dust { animation: dust 1.1s ease-out infinite; }
 @keyframes dust {
-  0%, 68%  { opacity: 0; transform: translateY(0); }
-  72%      { opacity: .9; transform: translateY(0); }
-  100%     { opacity: 0; transform: translateY(-10px); }
+  0%, 68% { opacity: 0; transform: translateY(0); }
+  72%     { opacity: .9; transform: translateY(0); }
+  100%    { opacity: 0; transform: translateY(-10px); }
 }
 
-/* 움직임을 줄여달라고 한 사람에게는 숫자만 남긴다. */
+/* ── 시멘트 나르기 ── 가로지르며 걷는다. 다리가 번갈아, 몸이 살짝 위아래로. */
+.walk { animation: walk 5s linear infinite; }
+@keyframes walk {
+  0%   { transform: translateX(-34px); opacity: 0; }
+  10%  { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { transform: translateX(42px); opacity: 0; }
+}
+.bob { animation: bob .5s ease-in-out infinite; }
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-2.5px); }
+}
+.leg-a, .leg-b { transform-origin: 42px 62px; }
+.leg-a { animation: step .5s ease-in-out infinite; }
+.leg-b { animation: step .5s ease-in-out infinite reverse; }
+@keyframes step {
+  0%, 100% { transform: rotate(-17deg); }
+  50%      { transform: rotate(17deg); }
+}
+
+/* ── 삽질 ── 허리를 굽혀 퍼 올리고 옆으로 던진다. */
+.scoop { transform-origin: 46px 62px; animation: scoop 1.8s ease-in-out infinite; }
+@keyframes scoop {
+  0%, 20% { transform: rotate(34deg); }
+  45%     { transform: rotate(-6deg); }
+  60%     { transform: rotate(-18deg); }
+  100%    { transform: rotate(34deg); }
+}
+.toss { animation: toss 1.8s ease-out infinite; }
+@keyframes toss {
+  0%, 52% { opacity: 0; transform: translate(0, 0); }
+  58%     { opacity: .9; transform: translate(0, 0); }
+  100%    { opacity: 0; transform: translate(22px, -16px); }
+}
+
+/* 움직임을 줄여달라고 한 사람에게는 숫자만 남긴다. 장면 순환도 멈춘다. */
 @media (prefers-reduced-motion: reduce) {
-  .worker-swing, .worker-dust { animation: none; }
-  .worker-swing { transform: rotate(-20deg); }
+  .swing, .dust, .walk, .bob, .leg-a, .leg-b, .scoop, .toss { animation: none; }
+  .swing { transform: rotate(-20deg); }
+  .scoop { transform: rotate(18deg); }
 }

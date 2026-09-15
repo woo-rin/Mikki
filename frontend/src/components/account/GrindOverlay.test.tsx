@@ -1,8 +1,8 @@
-import { render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { act, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { baseSnapshot } from '../../mocks/fixtures'
 import { useGameStore } from '../../store/gameStore'
-import { GrindOverlay } from './GrindOverlay'
+import { GrindOverlay, SCENES, SCENE_MS } from './GrindOverlay'
 
 let seq = 0
 
@@ -74,5 +74,49 @@ describe('노가다 오버레이', () => {
     render(<GrindOverlay />)
     expect(screen.getByRole('dialog')).toHaveAccessibleName(/노가다/)
     expect(screen.getByRole('timer')).toHaveTextContent('42')
+  })
+})
+
+describe('일하는 장면', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('처음에는 곡괭이질이다', () => {
+    lock()
+    render(<GrindOverlay />)
+    expect(screen.getByTestId('grind-scene')).toHaveAttribute('data-scene', 'dig')
+  })
+
+  it('시간이 지나면 다음 장면으로 넘어간다', () => {
+    lock()
+    render(<GrindOverlay />)
+    act(() => { vi.advanceTimersByTime(SCENE_MS) })
+    expect(screen.getByTestId('grind-scene')).toHaveAttribute('data-scene', 'carry')
+    act(() => { vi.advanceTimersByTime(SCENE_MS) })
+    expect(screen.getByTestId('grind-scene')).toHaveAttribute('data-scene', 'shovel')
+  })
+
+  it('한 바퀴 돌면 처음으로 돌아온다', () => {
+    lock()
+    render(<GrindOverlay />)
+    act(() => { vi.advanceTimersByTime(SCENE_MS * SCENES.length) })
+    expect(screen.getByTestId('grind-scene')).toHaveAttribute('data-scene', 'dig')
+  })
+
+  it('잠금이 풀리면 타이머가 남지 않는다', () => {
+    lock()
+    const { unmount } = render(<GrindOverlay />)
+    unmount()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('장면마다 다른 도구가 그려진다', () => {
+    lock()
+    render(<GrindOverlay />)
+    expect(screen.getByTestId('tool-pick')).toBeInTheDocument()
+    act(() => { vi.advanceTimersByTime(SCENE_MS) })
+    expect(screen.getByTestId('tool-bag')).toBeInTheDocument()
+    act(() => { vi.advanceTimersByTime(SCENE_MS) })
+    expect(screen.getByTestId('tool-shovel')).toBeInTheDocument()
   })
 })
