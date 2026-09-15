@@ -189,11 +189,16 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
   50%      { transform: translateY(-2.5px); }
 }
 .leg-a, .leg-b { transform-origin: 42px 62px; }
-.leg-a { animation: step .5s ease-in-out infinite; }
-.leg-b { animation: step .5s ease-in-out infinite reverse; }
+/*
+ * 반대 위상은 음수 지연으로 만든다. reverse 를 쓰면 안 된다 —
+ * step 이 -22° → +22° → -22° 로 좌우대칭이라 뒤집어도 같은 움직임이 나오고,
+ * 두 다리가 한 몸처럼 붙어 하나로 보인다.
+ */
+.leg-a { animation: step .52s ease-in-out infinite; }
+.leg-b { animation: step .52s ease-in-out -.26s infinite; opacity: .42; }
 @keyframes step {
-  0%, 100% { transform: rotate(-17deg); }
-  50%      { transform: rotate(17deg); }
+  0%, 100% { transform: rotate(-22deg); }
+  50%      { transform: rotate(22deg); }
 }
 
 /* ── 삽질 ── 허리를 굽혀 퍼 올리고 옆으로 던진다. */

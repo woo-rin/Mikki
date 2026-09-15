@@ -40,8 +40,9 @@ function Carry() {
         <line x1="42" y1="35" x2="42" y2="62" className="worker-ink" />
         {/* 포대를 받친 팔 */}
         <line x1="42" y1="40" x2="56" y2="28" className="worker-ink" />
-        <g className="leg-a"><line x1="42" y1="62" x2="42" y2="88" className="worker-ink" /></g>
+        {/* 뒷다리를 먼저 그려 앞다리에 가려지게 한다. 겹칠 때도 둘로 읽힌다. */}
         <g className="leg-b"><line x1="42" y1="62" x2="42" y2="88" className="worker-ink" /></g>
+        <g className="leg-a"><line x1="42" y1="62" x2="42" y2="88" className="worker-ink" /></g>
       </g>
     </g>
   )

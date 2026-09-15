@@ -110,6 +110,18 @@ describe('일하는 장면', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it('짐을 나를 때 다리가 둘이고 뒷다리가 먼저 그려진다', () => {
+    lock()
+    const { container } = render(<GrindOverlay />)
+    act(() => { vi.advanceTimersByTime(SCENE_MS) })
+
+    const legs = container.querySelectorAll('.leg-a, .leg-b')
+    expect(legs).toHaveLength(2)
+    // 뒷다리가 앞에 와야 앞다리에 가려진다 — 겹칠 때도 둘로 읽힌다
+    expect(legs[0]).toHaveClass('leg-b')
+    expect(legs[1]).toHaveClass('leg-a')
+  })
+
   it('장면마다 다른 도구가 그려진다', () => {
     lock()
     render(<GrindOverlay />)
