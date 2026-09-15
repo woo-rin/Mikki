@@ -3,7 +3,6 @@ import { ApiError } from '../../api/client'
 import { trade } from '../../api/endpoints'
 import { won } from '../../lib/format'
 import { fee, maxBuyQty } from '../../lib/money'
-import { useDerivedStore } from '../../store/derivedStore'
 import { useGameStore } from '../../store/gameStore'
 import { useUiStore } from '../../store/uiStore'
 
@@ -34,7 +33,7 @@ export function OrderTicket() {
       const res = await trade(sessionId, stock.symbol, side, clamped)
       // 낙관적 UI 금지 — 화면은 이 응답만 따른다.
       useGameStore.getState().applyTrade(res)
-      useDerivedStore.getState().recordFill(res)
+      // 평단은 서버가 들고 있다. 다음 폴링의 avg_cost 로 들어온다.
       const gap = res.price - quoted
       const tail = gap === 0 ? '' : ` (표시가와 ${won(Math.abs(gap))} 차이)`
       pushToast(

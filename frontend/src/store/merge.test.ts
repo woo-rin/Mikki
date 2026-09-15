@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   baseSnapshot, capturedAnalyze, capturedCompanyAnalysis, capturedTrade, sampleNews,
 } from '../mocks/fixtures'
-import { applyBuy, emptyPosition } from '../lib/money'
 import {
   applyCompanyAnalysisToSnapshot, applyGrindToSnapshot, applyTradeToSnapshot,
   attachAnalysis, isFresher, maxNewsId, positionRows, priceSeries, upsertNews,
@@ -123,30 +122,28 @@ describe('시퀀스 가드', () => {
 })
 
 describe('보유 행', () => {
-  it('보유가 없는 종목은 빠진다', () => {
-    expect(positionRows(baseSnapshot(), {})).toEqual([])
-  })
-
-  it('held 는 있는데 평단이 없으면 손익이 null 이다 — 새로고침 후', () => {
-    const snap = baseSnapshot({
-      stocks: baseSnapshot().stocks.map((s) => (s.symbol === 'geno' ? { ...s, held: 3 } : s)),
-    })
-    const rows = positionRows(snap, {})
-    expect(rows).toHaveLength(1)
-    expect(rows[0]?.avg).toBeNull()
-    expect(rows[0]?.unrealized).toBeNull()
-  })
-
-  it('평단을 알면 손익을 계산한다', () => {
-    const snap = baseSnapshot({
+  const withGeno = (patch: Record<string, unknown>) =>
+    baseSnapshot({
       stocks: baseSnapshot().stocks.map((s) =>
-        s.symbol === 'geno' ? { ...s, held: 3, price: 50_000 } : s,
+        s.symbol === 'geno' ? { ...s, ...patch } : s,
       ),
     })
-    const positions = { geno: applyBuy(emptyPosition(), 45_000, 3) } // avg 45090
-    const rows = positionRows(snap, positions)
+
+  it('보유가 없는 종목은 빠진다', () => {
+    expect(positionRows(baseSnapshot())).toEqual([])
+  })
+
+  it('서버가 준 avg_cost 를 그대로 쓴다', () => {
+    const rows = positionRows(withGeno({ held: 3, price: 50_000, avg_cost: 45_090 }))
+    expect(rows).toHaveLength(1)
     expect(rows[0]?.avg).toBe(45_090)
     expect(rows[0]?.unrealized).toBe((50_000 - 45_090) * 3)
+  })
+
+  it('avg_cost 가 null 이면 손익도 null 이다', () => {
+    const rows = positionRows(withGeno({ held: 3, price: 50_000, avg_cost: null }))
+    expect(rows[0]?.avg).toBeNull()
+    expect(rows[0]?.unrealized).toBeNull()
   })
 })
 

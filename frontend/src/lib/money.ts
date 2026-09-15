@@ -26,42 +26,16 @@ export function maxBuyQty(cash: number, price: number): number {
   return q
 }
 
-export interface Position {
-  qty: number
-  /** 매수 수수료를 포함한 취득 단가, 내림. 0 은 "모른다" 를 뜻한다. */
-  avg: number
-  realized: number
-}
-
-export function emptyPosition(): Position {
-  return { qty: 0, avg: 0, realized: 0 }
-}
-
-export function applyBuy(pos: Position, price: number, qty: number): Position {
-  const nextQty = pos.qty + qty
-  const total = pos.avg * pos.qty + buyCost(price, qty)
-  return { qty: nextQty, avg: Math.floor(total / nextQty), realized: pos.realized }
-}
-
-export function applySell(pos: Position, price: number, qty: number): Position {
-  const nextQty = pos.qty - qty
-  const realized = pos.realized + (sellNet(price, qty) - pos.avg * qty)
-  return nextQty <= 0
-    ? { qty: 0, avg: 0, realized }
-    : { qty: nextQty, avg: pos.avg, realized }
-}
-
 /**
- * 평가손익. **모르면 null 을 돌려준다.**
- * 새로고침하면 평단이 사라지므로, 0 으로 채워 틀린 손익을 그리지 않는다.
- * 서버의 held 와 기록된 수량이 어긋나도 모르는 것으로 취급한다.
+ * 평가손익. 평단은 서버가 avg_cost 로 준다 — 안 들고 있으면 null 이다.
+ * null 을 0 으로 바꾸지 않는다. 그러면 틀린 손익이 그럴듯하게 그려진다.
  */
-export function unrealizedFor(
-  pos: Position | undefined,
-  held: number,
+export function unrealized(
+  avgCost: number | null,
   price: number,
+  held: number,
 ): number | null {
   if (held === 0) return 0
-  if (!pos || pos.qty !== held || pos.avg === 0) return null
-  return (price - pos.avg) * held
+  if (avgCost === null) return null
+  return (price - avgCost) * held
 }

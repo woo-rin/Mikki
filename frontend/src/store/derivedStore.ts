@@ -1,22 +1,19 @@
 import { create } from 'zustand'
-import type { AnalyzeResult, CompanyAnalysisResult, Snapshot, TradeResult } from '../api/types'
-import { type Position, applyBuy, applySell, emptyPosition } from '../lib/money'
+import type { AnalyzeResult, CompanyAnalysisResult, Snapshot } from '../api/types'
 import { type FeedItem, attachAnalysis, upsertNews } from './merge'
 
 /**
  * 새로고침하면 사라지는 것들만 담는다.
- * 가격 이력은 여기 없다 — 서버가 stocks[].history 로 준다 (api.md §6).
+ * 가격 이력과 평단은 여기 없다 — 서버가 stocks[].history 와 avg_cost 로 준다 (api.md §6).
  */
 interface DerivedState {
   feed: FeedItem[]
-  positions: Record<string, Position>
   /** 산 종목의 적정가와 등급. 스냅샷에 없으므로 여기서만 산다. */
   valuations: Record<string, CompanyAnalysisResult>
   /** 라운드가 바뀐 것을 알아보기 위한 표식 */
   roundNo: number | null
 
   record: (snap: Snapshot) => void
-  recordFill: (res: TradeResult) => void
   recordAnalysis: (res: AnalyzeResult, tick: number) => void
   recordValuation: (res: CompanyAnalysisResult) => void
   reset: () => void
@@ -24,7 +21,6 @@ interface DerivedState {
 
 export const useDerivedStore = create<DerivedState>((set) => ({
   feed: [],
-  positions: {},
   valuations: {},
   roundNo: null,
 
@@ -40,20 +36,10 @@ export const useDerivedStore = create<DerivedState>((set) => ({
       }
     }),
 
-  recordFill: (res) =>
-    set((s) => {
-      const prev = s.positions[res.symbol] ?? emptyPosition()
-      const next =
-        res.side === 'buy'
-          ? applyBuy(prev, res.price, res.qty)
-          : applySell(prev, res.price, res.qty)
-      return { positions: { ...s.positions, [res.symbol]: next } }
-    }),
-
   recordAnalysis: (res, tick) => set((s) => ({ feed: attachAnalysis(s.feed, res, tick) })),
 
   recordValuation: (res) =>
     set((s) => ({ valuations: { ...s.valuations, [res.symbol]: res } })),
 
-  reset: () => set({ feed: [], positions: {}, valuations: {}, roundNo: null }),
+  reset: () => set({ feed: [], valuations: {}, roundNo: null }),
 }))

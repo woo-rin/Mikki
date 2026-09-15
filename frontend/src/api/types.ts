@@ -27,6 +27,8 @@ export interface Stock {
   fundamentals_analyzed: boolean
   /** 최근 60틱의 가격. 오래된 것이 앞이고 마지막 값이 price 와 같다. 서버가 들고 있다. */
   history: number[]
+  /** 수수료를 포함한 취득 단가(내림). **안 들고 있으면 null** — 0 이 아니다. */
+  avg_cost: number | null
 }
 
 export interface NewsItem {

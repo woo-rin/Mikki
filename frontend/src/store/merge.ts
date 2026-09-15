@@ -3,7 +3,7 @@ import type {
   Symbol_, TradeResult,
 } from '../api/types'
 import { publishTick as toPublishTick, rampEndTick } from '../lib/derive'
-import { type Position, unrealizedFor } from '../lib/money'
+import { unrealized } from '../lib/money'
 
 export interface PricePoint {
   tick: number
@@ -109,24 +109,17 @@ export function isFresher(lastSeq: number, seq: number): boolean {
   return seq > lastSeq
 }
 
-export function positionRows(
-  snap: Snapshot,
-  positions: Record<string, Position>,
-): PositionRow[] {
+export function positionRows(snap: Snapshot): PositionRow[] {
   return snap.stocks
     .filter((s) => s.held > 0)
-    .map((s) => {
-      const pos = positions[s.symbol]
-      const known = pos !== undefined && pos.qty === s.held && pos.avg !== 0
-      return {
-        symbol: s.symbol,
-        name: s.name,
-        held: s.held,
-        price: s.price,
-        avg: known ? (pos?.avg ?? null) : null,
-        unrealized: unrealizedFor(pos, s.held, s.price),
-      }
-    })
+    .map((s) => ({
+      symbol: s.symbol,
+      name: s.name,
+      held: s.held,
+      price: s.price,
+      avg: s.avg_cost,
+      unrealized: unrealized(s.avg_cost, s.price, s.held),
+    }))
 }
 
 export function applyTradeToSnapshot(snap: Snapshot, res: TradeResult): Snapshot {

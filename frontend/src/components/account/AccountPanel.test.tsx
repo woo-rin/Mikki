@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { baseSnapshot, capturedTrade } from '../../mocks/fixtures'
+import { baseSnapshot } from '../../mocks/fixtures'
 import { useDerivedStore } from '../../store/derivedStore'
 import { useGameStore } from '../../store/gameStore'
 import { AccountPanel } from './AccountPanel'
@@ -32,7 +32,7 @@ describe('계좌', () => {
 })
 
 describe('보유', () => {
-  it('평단을 모르면 손익을 — 로 둔다', () => {
+  it('서버가 평단을 모른다고 하면 손익을 — 로 둔다', () => {
     const snap = baseSnapshot()
     useGameStore.getState().applySnapshot(
       { ...snap, stocks: snap.stocks.map((s) => (s.symbol === 'geno' ? { ...s, held: 3 } : s)) },
@@ -42,18 +42,17 @@ describe('보유', () => {
     expect(screen.getAllByText('—').length).toBeGreaterThan(0)
   })
 
-  it('체결로 평단이 생기면 손익을 그린다', () => {
+  it('서버가 준 평단으로 손익을 그린다', () => {
     const snap = baseSnapshot()
     useGameStore.getState().applySnapshot(
       {
         ...snap,
         stocks: snap.stocks.map((s) =>
-          s.symbol === 'geno' ? { ...s, held: 2, price: 50_000 } : s,
+          s.symbol === 'geno' ? { ...s, held: 2, price: 50_000, avg_cost: 44_707 } : s,
         ),
       },
       1,
     )
-    useDerivedStore.getState().recordFill(capturedTrade) // geno 2주 @44618, avg 44707
     render(<Positions />)
     expect(screen.getByText('44,707원')).toBeInTheDocument()
     expect(screen.queryByText('—')).not.toBeInTheDocument()

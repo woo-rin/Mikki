@@ -65,22 +65,9 @@ describe('derivedStore', () => {
     d.record(baseSnapshot({ tick: 1, news: [sampleNews()] }))
     d.record(baseSnapshot({ tick: 2 }))
     expect(useDerivedStore.getState().feed).toHaveLength(1)
+    // 가격 이력과 평단은 서버가 들고 있다 — 여기 없는 것이 맞다
     expect('history' in useDerivedStore.getState()).toBe(false)
-  })
-
-  it('체결로만 평단이 생긴다', () => {
-    const d = useDerivedStore.getState()
-    d.recordFill(capturedTrade) // buy geno 2 @ 44618, fee 178
-    const pos = useDerivedStore.getState().positions['geno']
-    expect(pos?.qty).toBe(2)
-    expect(pos?.avg).toBe(Math.floor((44_618 * 2 + 178) / 2))
-  })
-
-  it('매도가 수량을 줄인다', () => {
-    const d = useDerivedStore.getState()
-    d.recordFill(capturedTrade)
-    useDerivedStore.getState().recordFill({ ...capturedTrade, side: 'sell', qty: 2 })
-    expect(useDerivedStore.getState().positions['geno']?.qty).toBe(0)
+    expect('positions' in useDerivedStore.getState()).toBe(false)
   })
 
   it('분석 결과가 피드에 붙는다', () => {
@@ -111,13 +98,6 @@ describe('기업분석 보관', () => {
     useDerivedStore.getState().recordValuation(capturedCompanyAnalysis)
     useDerivedStore.getState().record(baseSnapshot({ round_no: 2 }))
     expect(useDerivedStore.getState().valuations).toEqual({})
-  })
-
-  it('평단은 라운드가 바뀌어도 남는다', () => {
-    useDerivedStore.getState().record(baseSnapshot({ round_no: 1, tick: 3 }))
-    useDerivedStore.getState().recordFill(capturedTrade)
-    useDerivedStore.getState().record(baseSnapshot({ round_no: 2, tick: 4 }))
-    expect(useDerivedStore.getState().positions['geno']?.qty).toBe(2)
   })
 })
 
