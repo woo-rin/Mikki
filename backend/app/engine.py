@@ -7,7 +7,7 @@
 import math
 import random
 from collections import deque
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from app import config
@@ -21,6 +21,8 @@ class PriceState:
     anchor_log: dict[str, float] = field(default_factory=dict)
     # 종목별 최근 가격. maxlen 이 걸려 있어 길이가 저절로 유지된다.
     history: dict[str, deque] = field(default_factory=dict)
+    # 주문 충격. 매 tick 0 으로 식는다 — 누적 로그수익과 섞으면 나선이 된다.
+    flow_log: dict[str, float] = field(default_factory=dict)
     last_tick: int = 0
 
 
@@ -47,6 +49,7 @@ def new_state(fair_values: dict[str, int], rng: random.Random) -> PriceState:
             symbol: deque(maxlen=config.PRICE_HISTORY_TICKS)
             for symbol in config.STOCKS
         },
+        flow_log={symbol: 0.0 for symbol in config.STOCKS},
         last_tick=0,
     )
 
@@ -60,13 +63,30 @@ def reanchor(state: PriceState, fair_values: dict[str, int]) -> None:
         state.anchor_log[symbol] = math.log(fair / state.start_price[symbol])
 
 
+def add_flow(state: PriceState, symbol: str, value: int) -> None:
+    """원 단위 순매수액을 일시적 가격 충격으로 옮긴다. 매수가 양수다.
+
+    상한은 이 게임의 축을 지킨다 — 주문 흐름이 뉴스보다 세면 낚시를 읽는 것이
+    무의미해지고 AI 분석 5회의 희소성이 무너진다.
+    """
+    nudged = state.flow_log[symbol] + (
+        config.FLOW_IMPACT_PER_MILLION * value / 1_000_000
+    )
+    state.flow_log[symbol] = max(-config.FLOW_MAX, min(config.FLOW_MAX, nudged))
+
+
 def advance(
     state: PriceState,
     plans: Sequence[NewsPlan],
     to_tick: int,
     rng: random.Random,
+    on_tick: Callable[[int], dict[str, int]] | None = None,
 ) -> None:
-    """state 를 to_tick 까지 진행한다. to_tick 이 과거면 아무것도 하지 않는다."""
+    """state 를 to_tick 까지 진행한다. to_tick 이 과거면 아무것도 하지 않는다.
+
+    on_tick 은 그 tick 의 종목별 순매수액(원)을 돌려준다. engine 은 누가 왜
+    샀는지 모른다 — 매매 규칙은 participants 가 소유한다.
+    """
     if to_tick <= state.last_tick:
         return
 
@@ -93,7 +113,15 @@ def advance(
         for plan in active:
             if plan.publish_tick < tick <= plan.publish_tick + plan.ramp_seconds:
                 state.log_return[plan.symbol] += plan.impact / plan.ramp_seconds
-        # 이력은 램프까지 반영된 뒤에 찍는다. 순서가 바뀌면 차트가 한 tick 뒤처진다.
+        # 새 주문을 받기 전에 먼저 식힌다. 그래야 AI 가 보는 가격이 직전 tick 의
+        # 충격이 이미 일부 빠진 값이 된다.
+        for symbol in config.STOCKS:
+            state.flow_log[symbol] *= 1.0 - config.FLOW_DECAY
+        if on_tick is not None:
+            # AI 는 자기 주문이 가격을 밀기 전 가격을 보고 판단한다.
+            for symbol, value in on_tick(tick).items():
+                add_flow(state, symbol, value)
+        # 이력은 전부 반영된 뒤에 찍는다. 순서가 바뀌면 차트가 한 tick 뒤처진다.
         for symbol in config.STOCKS:
             state.history[symbol].append(price_of(state, symbol))
     state.last_tick = max(state.last_tick, to_tick)
@@ -101,7 +129,10 @@ def advance(
 
 def price_of(state: PriceState, symbol: str) -> int:
     """원 단위 정수. 내림으로 통일한다."""
-    return math.floor(state.start_price[symbol] * math.exp(state.log_return[symbol]))
+    return math.floor(
+        state.start_price[symbol]
+        * math.exp(state.log_return[symbol] + state.flow_log[symbol])
+    )
 
 
 def history_of(state: PriceState, symbol: str) -> list[int]:

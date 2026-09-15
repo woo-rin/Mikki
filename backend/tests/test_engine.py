@@ -345,3 +345,121 @@ def test_history_follows_a_news_ramp(no_anchor):
     series = engine.history_of(state, "geno")
     assert series == sorted(series)
     assert series[-1] > series[0]
+
+
+# ---------------------------------------------------------- 주문 흐름
+
+def test_flow_moves_price_immediately():
+    state = _state()
+    before = price_of(state, "geno")
+    engine.add_flow(state, "geno", 1_000_000)
+    assert price_of(state, "geno") > before
+
+
+def test_flow_decays_back_to_zero(no_anchor):
+    """감쇠가 없으면 AI 가 산 것이 영원히 가격에 남아 되먹임 나선이 된다.
+
+    앵커를 끈다 — 켜 두면 가격이 원래 값이 아니라 적정가 쪽으로 수렴해
+    무엇이 되돌린 것인지 구분되지 않는다.
+    """
+    state = _state()
+    before = price_of(state, "geno")
+    engine.add_flow(state, "geno", 1_000_000)
+    advance(state, [], to_tick=200, rng=ZeroRandom(0))
+    assert price_of(state, "geno") == pytest.approx(before, rel=0.001)
+
+
+def test_flow_is_capped_no_matter_how_much_is_bought():
+    """상한이 '주문 흐름은 조역' 을 구조적 보장으로 만든다."""
+    state = _state()
+    for _ in range(50):
+        engine.add_flow(state, "geno", 10_000_000)
+    assert state.flow_log["geno"] == pytest.approx(config.FLOW_MAX)
+
+
+def test_flow_is_capped_downward_too():
+    state = _state()
+    for _ in range(50):
+        engine.add_flow(state, "geno", -10_000_000)
+    assert state.flow_log["geno"] == pytest.approx(-config.FLOW_MAX)
+
+
+def test_flow_cap_is_weaker_than_a_typical_news_ramp():
+    """조역이어야 한다. 뉴스를 이기면 게임의 축이 뒤집힌다."""
+    assert config.FLOW_MAX < 0.10 * 0.35
+
+
+def test_flow_only_touches_its_own_symbol():
+    state = _state()
+    others = {s: price_of(state, s) for s in config.STOCKS if s != "geno"}
+    engine.add_flow(state, "geno", 2_000_000)
+    assert {s: price_of(state, s) for s in config.STOCKS if s != "geno"} == others
+
+
+def test_on_tick_receives_every_tick_in_order():
+    state = _state()
+    seen = []
+
+    def probe(tick):
+        seen.append(tick)
+        return {}
+
+    advance(state, [], to_tick=5, rng=ZeroRandom(0), on_tick=probe)
+    assert seen == [1, 2, 3, 4, 5]
+
+
+def test_on_tick_sees_price_before_its_own_order_lands(no_anchor):
+    """AI 는 자기 주문이 가격을 밀기 전 가격을 보고 판단해야 한다."""
+    state = _state()
+    observed = []
+
+    def probe(tick):
+        observed.append(price_of(state, "geno"))
+        return {"geno": 3_000_000}
+
+    advance(state, [], to_tick=2, rng=ZeroRandom(0), on_tick=probe)
+    assert observed[0] == state.start_price["geno"]
+    assert observed[1] > observed[0]
+
+
+def test_none_on_tick_is_identical_to_before():
+    """기존 호출부가 하나도 안 깨져야 한다."""
+    a = _state()
+    advance(a, [], to_tick=50, rng=random.Random(5))
+    b = _state()
+    advance(b, [], to_tick=50, rng=random.Random(5), on_tick=None)
+    assert a.log_return == b.log_return
+    assert a.flow_log == b.flow_log
+
+
+def test_incremental_matches_bulk_with_flow():
+    """따라잡기 요청이 500ms 폴링과 같은 결과를 내야 한다."""
+    def orders(tick):
+        return {"geno": 200_000} if tick % 7 == 0 else {}
+
+    stepwise = _state()
+    rng = random.Random(11)
+    for tick in range(1, 61):
+        advance(stepwise, [], to_tick=tick, rng=rng, on_tick=orders)
+
+    at_once = _state()
+    advance(at_once, [], to_tick=60, rng=random.Random(11), on_tick=orders)
+
+    assert stepwise.log_return == at_once.log_return
+    assert stepwise.flow_log == at_once.flow_log
+
+
+def test_all_four_forces_coexist():
+    """노이즈·앵커·램프·주문흐름이 한 tick 에서 같이 돌아도 서로를 지우지 않는다."""
+    fair = {symbol: 10_000 for symbol in config.STOCKS}
+    state = new_state(fair, random.Random(1))
+    state.start_price = {symbol: 10_000 for symbol in config.STOCKS}
+    engine.reanchor(state, fair)
+    p = plan(impact=0.10, ramp=30, publish_tick=0)
+
+    advance(state, [p], to_tick=30, rng=random.Random(4),
+            on_tick=lambda t: {"geno": 300_000})
+
+    assert price_of(state, "geno") > 10_000 * (1 + config.FLOW_MAX)
+    assert state.flow_log["geno"] > 0
+    assert state.anchor_log["geno"] - state.log_return["geno"] < 0
