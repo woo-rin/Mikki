@@ -41,6 +41,9 @@ class GameSession:
     pending_payout: int = 0
     ais: list[participants.AIState] = field(default_factory=list)
     ai_seed: int = 0
+    # 판마다 다른 분기를 본다. 라운드가 사라지면서 펀더멘털 다양성이
+    # 판 안에서 판 사이로 옮겨왔다.
+    quarter_index: int = 0
     # 마지막으로 요청이 닿은 시각. 오래 조용하면 쓸려나간다.
     last_seen: float = 0.0
     trades: deque = field(default_factory=deque)
@@ -58,11 +61,13 @@ def new_session(
     started_at: float,
     ai_count: int = config.AI_COUNT_DEFAULT,
 ) -> GameSession:
+    quarter_index = rng.randrange(fundamentals.quarter_count())
     return GameSession(
         session_id=session_id,
         rng=rng,
         started_at=started_at,
-        prices=engine.new_state(fundamentals.fair_values(1), rng),
+        quarter_index=quarter_index,
+        prices=engine.new_state(fundamentals.fair_values(quarter_index), rng),
         cash=config.SEED_CASH,
         round_start_equity=config.SEED_CASH,
         target=config.SEED_CASH * config.ROUND_TARGET_MULTIPLIER,
@@ -264,7 +269,7 @@ def advance_round(sess: GameSession) -> None:
     sess.grind_count = 0
     # 새 분기 실적이 적정가를 옮긴다. 지난 라운드에 산 정보가 낡는다.
     # 가격은 건드리지 않는다 — 점프하면 보유 종목 평가액이 순간이동한다.
-    engine.reanchor(sess.prices, fundamentals.fair_values(sess.round_no))
+    engine.reanchor(sess.prices, fundamentals.fair_values(sess.quarter_index))
 
 
 # --------------------------------------------------- 체결 피드와 거래량

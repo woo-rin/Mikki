@@ -34,10 +34,15 @@ def load(path: str | None = None) -> dict:
     return _cache
 
 
-def quarter_of(snapshot: dict, symbol: str, round_no: int) -> dict:
-    """라운드 N 은 quarters[N-1]. 라운드 수에 상한이 없으므로 마르면 마지막을 쓴다."""
+def quarter_count(symbol: str = "geno") -> int:
+    """스냅샷이 들고 있는 분기 수. 판 시작 때 하나를 고르는 데 쓴다."""
+    return len(load()["stocks"][symbol]["quarters"])
+
+
+def quarter_of(snapshot: dict, symbol: str, index: int) -> dict:
+    """0-기반 분기. 범위 밖은 있는 것 중 가장 가까운 것으로 붙인다."""
     quarters = snapshot["stocks"][symbol]["quarters"]
-    return quarters[min(round_no - 1, len(quarters) - 1)]
+    return quarters[max(0, min(index, len(quarters) - 1))]
 
 
 def eps(quarter: dict) -> int:
@@ -60,11 +65,11 @@ def fair_value(symbol: str, quarter: dict) -> int:
     return math.floor(config.SECTOR_PSR[sector] * sps(quarter))
 
 
-def fair_values(round_no: int) -> dict[str, int]:
-    """그 라운드의 전 종목 적정가."""
+def fair_values(index: int) -> dict[str, int]:
+    """그 분기의 전 종목 적정가."""
     snapshot = load()
     return {
-        symbol: fair_value(symbol, quarter_of(snapshot, symbol, round_no))
+        symbol: fair_value(symbol, quarter_of(snapshot, symbol, index))
         for symbol in config.STOCKS
     }
 

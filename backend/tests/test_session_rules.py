@@ -16,6 +16,7 @@ from app.session import (
     is_bankrupt,
     is_locked,
     lock_remaining,
+    max_affordable,
     new_session,
     prune_volume,
     record_fill,
@@ -54,9 +55,12 @@ def test_not_bankrupt_exactly_at_threshold():
 
 
 def test_holdings_count_toward_solvency():
-    """주식을 들고 있으면 팔 수 있으니 파산이 아니다."""
+    """주식을 들고 있으면 팔 수 있으니 파산이 아니다.
+
+    수량을 고정하지 않는다 — 분기가 판마다 달라 시작가가 바뀐다.
+    """
     sess = fresh()
-    buy(sess, "geno", 20, now=0.0)
+    buy(sess, "geno", max_affordable(sess, "geno") // 2, now=0.0)
     sess.cash = 0
     assert is_bankrupt(sess) is False
 
@@ -310,23 +314,6 @@ def test_advance_round_refills_company_analyses_and_clears_symbols():
     assert sess.analyzed_symbols == set()
 
 
-def test_advance_round_reanchors_to_the_new_quarter():
-    """라운드 2 는 2분기 실적을 본다. 적정가가 움직여야 한다."""
-    sess = fresh()
-    before = dict(sess.prices.anchor_log)
-    sess.cash = sess.target
-
-    advance_round(sess)
-
-    assert sess.prices.anchor_log != before
-    expected = fundamentals.fair_values(2)
-    for symbol in config.STOCKS:
-        implied = sess.prices.start_price[symbol] * math.exp(
-            sess.prices.anchor_log[symbol]
-        )
-        assert implied == pytest.approx(expected[symbol], rel=1e-9)
-
-
 def test_advance_round_does_not_move_prices():
     sess = fresh()
     before = {s: engine.price_of(sess.prices, s) for s in config.STOCKS}
@@ -538,3 +525,32 @@ def test_trade_feed_keeps_the_newest():
     seqs = [t["seq"] for t in sess.trades]
     assert seqs[-1] == config.TRADES_MAX + 10
     assert seqs == sorted(seqs)
+
+
+# ------------------------------------------------------------ 분기 선택
+
+def test_each_game_picks_a_quarter():
+    sess = fresh()
+    assert 0 <= sess.quarter_index < fundamentals.quarter_count()
+
+
+def test_the_same_seed_picks_the_same_quarter():
+    a = new_session("a", random.Random(9), started_at=0.0)
+    b = new_session("b", random.Random(9), started_at=0.0)
+    assert a.quarter_index == b.quarter_index
+
+
+def test_quarters_differ_between_games():
+    """펀더멘털 다양성이 판 사이로 옮겨왔다."""
+    picks = {new_session("s", random.Random(s), 0.0).quarter_index for s in range(40)}
+    assert len(picks) > 1
+
+
+def test_prices_start_from_the_picked_quarter():
+    sess = new_session("s", random.Random(3), started_at=0.0)
+    expected = fundamentals.fair_values(sess.quarter_index)
+    for symbol in config.STOCKS:
+        implied = sess.prices.start_price[symbol] * math.exp(
+            sess.prices.anchor_log[symbol]
+        )
+        assert implied == pytest.approx(expected[symbol], rel=1e-9)

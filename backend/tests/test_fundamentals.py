@@ -56,15 +56,15 @@ def test_fair_value_of_zero_profit_also_uses_psr():
 
 def test_fair_value_is_a_floored_integer():
     for symbol in config.STOCKS:
-        for round_no in (1, 2, 3, 4):
-            fair = fundamentals.fair_values(round_no)[symbol]
+        for index in range(4):
+            fair = fundamentals.fair_values(index)[symbol]
             assert isinstance(fair, int)
             assert fair > 0
 
 
-def test_round_one_fair_values_are_exactly_these():
+def test_first_quarter_fair_values_are_exactly_these():
     """스냅샷 전사 오류를 여기서 잡는다. 밸런스의 기준점이다."""
-    assert fundamentals.fair_values(1) == {
+    assert fundamentals.fair_values(0) == {
         "hanbit": 81_928,
         "geno": 39_216,
         "sungjin": 60_984,
@@ -74,22 +74,25 @@ def test_round_one_fair_values_are_exactly_these():
     }
 
 
-def test_round_three_uses_the_psr_path_for_geno():
-    """3라운드의 geno 는 적자 분기다."""
-    assert fundamentals.fair_values(3)["geno"] == 39_838
+def test_third_quarter_uses_the_psr_path_for_geno():
+    """인덱스 2 의 geno 는 적자 분기다."""
+    assert fundamentals.fair_values(2)["geno"] == 39_838
 
 
-def test_round_beyond_the_snapshot_reuses_the_last_quarter():
-    """라운드 수에 상한이 없다. 분기가 마르면 마지막 것을 계속 쓴다."""
-    last = fundamentals.fair_values(4)
-    assert fundamentals.fair_values(5) == last
-    assert fundamentals.fair_values(99) == last
+def test_quarter_index_is_clamped_to_what_exists():
+    """범위 밖을 줘도 죽지 않는다. 있는 것 중 가장 가까운 것으로 붙인다."""
+    assert fundamentals.fair_values(99) == fundamentals.fair_values(3)
+    assert fundamentals.fair_values(-5) == fundamentals.fair_values(0)
 
 
-def test_quarter_of_is_one_indexed():
+def test_quarter_count_matches_the_snapshot():
+    assert fundamentals.quarter_count() == 4
+
+
+def test_quarter_of_is_zero_indexed():
     snapshot = fundamentals.load()
-    assert fundamentals.quarter_of(snapshot, "geno", 1)["label"] == "2024Q1"
-    assert fundamentals.quarter_of(snapshot, "geno", 3)["label"] == "2024Q3"
+    assert fundamentals.quarter_of(snapshot, "geno", 0)["label"] == "2024Q1"
+    assert fundamentals.quarter_of(snapshot, "geno", 2)["label"] == "2024Q3"
 
 
 def test_gap_pct_is_positive_when_overvalued():

@@ -387,7 +387,11 @@ def test_company_analysis_returns_the_verdict(client):
     assert body["label"] == fundamentals.VALUATION_LABELS[body["valuation"]]
     assert body["commentary"].strip()
     assert body["company_analyses_left"] == config.COMPANY_ANALYSES_PER_ROUND - 1
-    assert body["financials"]["quarter"] == "2024Q1"
+    # 분기는 판마다 다르다. 세션이 고른 것과 일치해야 한다.
+    picked = fundamentals.quarter_of(
+        fundamentals.load(), "geno", sessions[sid].quarter_index
+    )
+    assert body["financials"]["quarter"] == picked["label"]
 
 
 def test_company_analysis_verdict_matches_the_prices(client):

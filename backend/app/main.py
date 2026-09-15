@@ -413,7 +413,7 @@ async def company_analyze(body: CompanyAnalyzeBody) -> dict:
         # 고정이라 다시 잴 것이 없다.
         stock = config.STOCKS[body.symbol]
         quarter = fundamentals.quarter_of(
-            fundamentals.load(), body.symbol, sess.round_no
+            fundamentals.load(), body.symbol, sess.quarter_index
         )
         price = engine.price_of(sess.prices, body.symbol)
         fair = fundamentals.fair_value(body.symbol, quarter)
