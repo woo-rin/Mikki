@@ -44,6 +44,9 @@ class GameSession:
     # 판마다 다른 분기를 본다. 라운드가 사라지면서 펀더멘털 다양성이
     # 판 안에서 판 사이로 옮겨왔다.
     quarter_index: int = 0
+    status: str = "running"            # "running" | "finished"
+    winner: str | None = None          # "you" 또는 AI 이름
+    ranking: list[dict] | None = None
     # 마지막으로 요청이 닿은 시각. 오래 조용하면 쓸려나간다.
     last_seen: float = 0.0
     trades: deque = field(default_factory=deque)
@@ -341,4 +344,65 @@ def ai_rows(sess: GameSession) -> list[dict]:
             "rank": rank,
         }
         for rank, (_, ai, total) in enumerate(scored, start=1)
+    ]
+
+
+# --------------------------------------------------------------- 경주 종료
+
+def winner_of(sess: GameSession) -> str | None:
+    """목표에 닿은 사람. 아무도 없으면 None.
+
+    같은 tick 에 둘이 넘으면 플레이어가 먼저다 — 임의로 흔들리면 같은 시드가
+    다른 결과를 낸다.
+    """
+    if sess.cash >= sess.target:
+        return "you"
+    for ai in sess.ais:
+        if ai.cash >= sess.target:
+            return ai.profile.name
+    return None
+
+
+def _liquidate_player(sess: GameSession) -> None:
+    """보유 전량을 현재가로 판다. 잠금을 검사하지 않는다 — 노가다 중이어도
+    경주는 끝나고, 잠금은 매매를 막지 청산을 막지 않는다.
+    """
+    for symbol in list(sess.holdings):
+        gross = engine.price_of(sess.prices, symbol) * sess.holdings[symbol]
+        sess.cash += gross - _fee(gross)
+    sess.holdings.clear()
+    sess.cost_basis.clear()
+
+
+def finish_race(sess: GameSession, winner: str) -> None:
+    """전원 강제 매도 후 순위를 확정한다.
+
+    승자는 **매도 전에** 정해져 있다. 그래서 승자의 최종 현금이 2위보다 적을
+    수 있다 — 목표선을 막 넘은 사람과, 주식을 잔뜩 들고 있다가 강제 매도로 큰
+    현금을 쥔 사람이 있을 때 그렇다. 의도한 것이다: 목표는 먼저 확정한 사람의
+    것이고, 그래서 익절을 미루는 데 대가가 있다.
+
+    수수료도 부과한다 — 미리 팔아둔 사람이 유리해야 익절 판단에 의미가 생긴다.
+    """
+    _liquidate_player(sess)
+    for ai in sess.ais:
+        for symbol in list(ai.holdings):
+            participants.sell_all(ai, symbol, engine.price_of(sess.prices, symbol))
+
+    rows = [{"name": "나", "cash": sess.cash, "is_player": True}]
+    rows += [
+        {"name": ai.profile.name, "cash": ai.cash, "is_player": False}
+        for ai in sess.ais
+    ]
+
+    def is_winner(row: dict) -> bool:
+        return row["is_player"] if winner == "you" else row["name"] == winner
+
+    champion = next(row for row in rows if is_winner(row))
+    rest = sorted((r for r in rows if r is not champion), key=lambda r: -r["cash"])
+
+    sess.status = "finished"
+    sess.winner = winner
+    sess.ranking = [
+        {**row, "rank": rank} for rank, row in enumerate([champion, *rest], start=1)
     ]

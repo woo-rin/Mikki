@@ -23,7 +23,9 @@ from app.session import (
     settle_grind,
     spend_analysis,
     spend_company_analysis,
+    finish_race,
     start_grind,
+    winner_of,
     volume_avg_of,
     volume_of,
 )
@@ -592,3 +594,122 @@ def test_target_is_three_times_the_seed_and_fixed():
     assert sess.target == config.SEED_CASH * config.TARGET_MULTIPLIER
     sess.cash = 9_000_000
     assert sess.target == config.SEED_CASH * config.TARGET_MULTIPLIER
+
+
+# ------------------------------------------------------------ 경주 종료
+
+def test_nobody_has_won_at_the_start():
+    assert winner_of(fresh()) is None
+
+
+def test_the_player_can_win():
+    sess = fresh()
+    sess.cash = sess.target
+    assert winner_of(sess) == "you"
+
+
+def test_an_ai_can_win():
+    sess = fresh()
+    sess.ais[2].cash = sess.target
+    assert winner_of(sess) == sess.ais[2].profile.name
+
+
+def test_the_player_wins_a_tie():
+    """같은 tick 에 둘이 넘으면 명단 순서로 가른다. 플레이어가 먼저다."""
+    sess = fresh()
+    sess.cash = sess.target
+    sess.ais[0].cash = sess.target
+    assert winner_of(sess) == "you"
+
+
+def test_finishing_sells_everything_the_player_holds():
+    sess = fresh()
+    buy(sess, "geno", 5, now=0.0)
+    assert sess.holdings
+
+    finish_race(sess, "you")
+
+    assert sess.holdings == {}
+    assert sess.cost_basis == {}
+    assert sess.status == "finished"
+
+
+def test_finishing_sells_everything_the_ais_hold():
+    sess = fresh()
+    participants.buy(sess.ais[0], "geno", engine.price_of(sess.prices, "geno"))
+    assert sess.ais[0].holdings
+
+    finish_race(sess, "you")
+
+    assert sess.ais[0].holdings == {}
+
+
+def test_the_forced_sale_charges_a_fee():
+    """미리 팔아둔 사람이 유리해야 익절 판단에 의미가 생긴다."""
+    sess = fresh()
+    price = engine.price_of(sess.prices, "geno")
+    buy(sess, "geno", 10, now=0.0)
+    cash_before = sess.cash
+
+    finish_race(sess, "you")
+
+    gross = price * 10
+    assert sess.cash == cash_before + gross - math.floor(gross * config.TRADE_FEE_RATE)
+
+
+def test_the_winner_ranks_first_even_with_less_cash():
+    """목표는 먼저 확정한 사람의 것이다. 그래서 익절을 미루는 데 대가가 있다."""
+    sess = fresh()
+    sess.cash = sess.target
+    sess.ais[0].cash = 9_000_000
+
+    finish_race(sess, "you")
+
+    assert sess.ranking[0]["name"] == "나"
+    assert sess.ranking[0]["is_player"] is True
+    assert sess.ranking[1]["cash"] > sess.ranking[0]["cash"]
+
+
+def test_everyone_below_the_winner_is_sorted_by_cash():
+    sess = fresh()
+    sess.cash = sess.target
+    for index, ai in enumerate(sess.ais):
+        ai.cash = 100_000 * (index + 1)
+
+    finish_race(sess, "you")
+
+    rest = [row["cash"] for row in sess.ranking[1:]]
+    assert rest == sorted(rest, reverse=True)
+
+
+def test_ranking_covers_everyone_and_numbers_from_one():
+    sess = fresh()
+    sess.cash = sess.target
+    finish_race(sess, "you")
+
+    assert len(sess.ranking) == len(sess.ais) + 1
+    assert [row["rank"] for row in sess.ranking] == list(range(1, len(sess.ais) + 2))
+
+
+def test_an_ai_winner_is_named():
+    sess = fresh()
+    champion = sess.ais[1]
+    champion.cash = sess.target
+
+    finish_race(sess, champion.profile.name)
+
+    assert sess.winner == champion.profile.name
+    assert sess.ranking[0]["name"] == champion.profile.name
+    assert sess.ranking[0]["is_player"] is False
+
+
+def test_a_locked_player_is_still_liquidated():
+    """노가다 중이어도 경주는 끝난다. 잠금은 매매를 막지 청산을 막지 않는다."""
+    sess = fresh()
+    buy(sess, "geno", 10, now=0.0)
+    sess.cash = 0
+    start_grind(sess, now=0.0)
+
+    finish_race(sess, "you")
+
+    assert sess.holdings == {}
