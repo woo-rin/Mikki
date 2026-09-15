@@ -4,7 +4,7 @@
 
 .banner { background: var(--accent); color: var(--ground); padding: var(--gap-2); text-align: center; font-weight: 600; }
 
-.board { display: grid; grid-template-rows: auto 1fr; min-height: 100vh; }
+.board { display: grid; grid-template-rows: auto auto 1fr; min-height: 100vh; }
 .topbar { display: flex; gap: var(--gap-4); align-items: center; padding: var(--gap-3) var(--gap-4); border-bottom: 1px solid var(--line); }
 .cols { display: grid; grid-template-columns: 380px 1fr; gap: var(--gap-4); padding: var(--gap-4); align-items: start; }
 .left, .right { display: grid; gap: var(--gap-4); }
@@ -73,3 +73,37 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 .panel .verdict-head { margin-bottom: var(--gap-3); }
 .panel > button:not(.primary) { background: var(--surface-3); border: 1px solid var(--line-strong); color: var(--ink); padding: var(--gap-1) var(--gap-3); cursor: pointer; font: inherit; }
 .panel > button:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ── 상단 요약 ─────────────────────────────────────────────── */
+.topbar .brand { font-size: 14px; }
+.topbar .spacer { flex: 1; }
+.tb-item { display: flex; gap: var(--gap-2); align-items: baseline; }
+.tb-key { color: var(--ink-3); font-size: 11px; }
+.tb-goal { background: var(--accent); color: var(--ground); padding: 2px var(--gap-2);
+  font-weight: 600; font-size: 12px; }
+
+/* ── 가로 티커 ─────────────────────────────────────────────── */
+/* 종목 선택은 항상 보여야 한다 — 차트·주문·기업분석이 전부 이 선택을 따른다. */
+.ticker { display: flex; gap: 1px; background: var(--line);
+  border-bottom: 1px solid var(--line); overflow-x: auto; }
+.tick { flex: 1 0 auto; display: grid; gap: 2px; justify-items: start;
+  background: var(--surface); border: 0; border-top: 2px solid transparent;
+  color: inherit; font: inherit; cursor: pointer;
+  padding: var(--gap-2) var(--gap-3); text-align: left; }
+.tick:hover { background: var(--surface-3); }
+.tick.on { background: var(--surface-3); border-top-color: var(--accent); }
+.tick-name { font-size: 12px; }
+.tick-price { font-size: 13px; }
+.tick-chg { font-size: 11px; }
+.tick-held { font-size: 11px; color: var(--ink-3); }
+
+/* ── 좌측 탭 ───────────────────────────────────────────────── */
+.tabs { display: flex; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.tab { flex: 1; background: var(--surface); border: 0; border-bottom: 2px solid transparent;
+  color: var(--ink-2); font: inherit; font-size: 12px; cursor: pointer;
+  padding: var(--gap-3) var(--gap-2); }
+.tab:hover { background: var(--surface-3); }
+.tab.on { background: var(--surface-3); color: var(--ink); border-bottom-color: var(--accent); }
+
+/* 우측은 차트가 남는 높이를 먹고 주문이 아래에 붙는다. */
+.right { grid-template-rows: 1fr auto; align-content: start; }

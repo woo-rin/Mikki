@@ -16,15 +16,15 @@ export function TopBar() {
 
       <span className="spacer" />
 
-      <span className="tb-item">
+      <span className="tb-item" aria-label="현금">
         <span className="tb-key">현금</span>
         <span className="num">{won(snap.cash)}</span>
       </span>
-      <span className="tb-item">
+      <span className="tb-item" aria-label="총자산">
         <span className="tb-key">총자산</span>
         <span className="num">{won(snap.equity)}</span>
       </span>
-      <span className="tb-item">
+      <span className="tb-item" aria-label="목표 자산">
         <span className="tb-key">목표</span>
         <span className="num">{won(snap.target)}</span>
       </span>
