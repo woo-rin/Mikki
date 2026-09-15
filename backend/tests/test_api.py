@@ -488,3 +488,87 @@ def test_history_never_grows_past_the_window(client):
     sid = start(client, 600)["session_id"]        # 10분을 한 번에 따라잡는다
     for row in state(client, sid)["stocks"]:
         assert len(row["history"]) == config.PRICE_HISTORY_TICKS
+
+
+# ------------------------------------------------------------ AI 참가자
+
+def test_game_seats_the_default_ai_count(client):
+    body = start(client)
+    assert len(body["ai"]) == config.AI_COUNT_DEFAULT
+    assert body["trades"] == []
+
+
+def test_game_without_a_body_still_works(client):
+    """프론트가 지금 본문 없이 부르고 있다. 깨지면 안 된다."""
+    response = client.post("/api/game")
+    assert response.status_code == 200
+    assert len(response.json()["ai"]) == config.AI_COUNT_DEFAULT
+
+
+def test_game_accepts_an_ai_count(client):
+    response = client.post("/api/game", json={"ai_count": 9})
+    assert response.status_code == 200
+    assert len(response.json()["ai"]) == 9
+
+
+@pytest.mark.parametrize("count", [0, -1, 10, 100])
+def test_game_rejects_an_out_of_range_ai_count(client, count):
+    response = client.post("/api/game", json={"ai_count": count})
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "bad_ai_count"
+
+
+def test_ai_rows_carry_a_rank_and_no_holdings(client):
+    body = start(client)
+    for row in body["ai"]:
+        assert set(row) == {"id", "name", "cash", "equity", "rank"}
+    assert sorted(r["rank"] for r in body["ai"]) == list(
+        range(1, config.AI_COUNT_DEFAULT + 1)
+    )
+
+
+def test_ais_actually_trade_once_time_passes(client):
+    sid = start(client, ELAPSED)["session_id"]
+    body = state(client, sid)
+    assert body["trades"], "120초가 흘렀는데 AI 가 한 번도 안 움직였다"
+    assert all(t["actor"] != "you" for t in body["trades"])
+
+
+def test_trades_since_filters_like_since(client):
+    sid = start(client, ELAPSED)["session_id"]
+    highest = max(t["seq"] for t in state(client, sid)["trades"])
+    response = client.get(f"/api/state?session_id={sid}&trades_since={highest}")
+    assert all(t["seq"] > highest for t in response.json()["trades"])
+
+
+def test_player_trades_appear_in_the_feed(client):
+    sid = start(client, ELAPSED)["session_id"]
+    client.post("/api/trade", json={"session_id": sid, "symbol": "geno",
+                                    "side": "buy", "qty": 1})
+    mine = [t for t in state(client, sid)["trades"] if t["actor"] == "you"]
+    assert len(mine) == 1
+    assert mine[0]["side"] == "buy" and mine[0]["qty"] == 1
+
+
+def test_stocks_report_volume(client):
+    sid = start(client, ELAPSED)["session_id"]
+    for row in state(client, sid)["stocks"]:
+        assert row["volume"] >= 0
+        assert row["volume_avg"] >= 0
+
+
+def test_snapshot_never_exposes_ai_holdings(client):
+    raw = json.dumps(start(client, ELAPSED), ensure_ascii=False)
+    assert "holdings" not in raw
+    assert "cursor" not in raw
+
+
+def test_more_ais_means_more_trades(client):
+    few = client.post("/api/game", json={"ai_count": 1}).json()
+    sessions[few["session_id"]].started_at -= ELAPSED
+    many = client.post("/api/game", json={"ai_count": 9}).json()
+    sessions[many["session_id"]].started_at -= ELAPSED
+
+    quiet = len(state(client, few["session_id"])["trades"])
+    loud = len(state(client, many["session_id"])["trades"])
+    assert loud > quiet
