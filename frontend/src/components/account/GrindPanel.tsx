@@ -11,8 +11,8 @@ export function GrindPanel() {
   const pushToast = useUiStore((s) => s.pushToast)
   const [busy, setBusy] = useState(false)
 
-  // 파산 판정은 노가다 버튼을 여는 신호일 뿐이다. 다른 UI 를 잠그지 않는다.
-  if (!snap || !snap.bankrupt || !sessionId) return null
+  // 평소에도 열려 있다. 파산은 더 이상 전제가 아니라 급함의 표시일 뿐이다.
+  if (!snap || !sessionId) return null
 
   async function run(): Promise<void> {
     if (!sessionId) return
@@ -33,11 +33,13 @@ export function GrindPanel() {
   }
 
   return (
-    <section className="panel warn">
-      <h2>파산</h2>
-      <p>
-        총자산이 10만원 아래로 떨어졌습니다. <strong>매매와 분석은 계속 가능합니다.</strong>
-      </p>
+    <section className={snap.bankrupt ? 'panel warn' : 'panel'}>
+      <h2>{snap.bankrupt ? '파산' : '노가다'}</h2>
+      {snap.bankrupt && (
+        <p>
+          총자산이 10만원 아래로 떨어졌습니다. <strong>매매와 분석은 계속 가능합니다.</strong>
+        </p>
+      )}
       {snap.locked ? (
         <p className="num">{`잠금 ${snap.lock_remaining}초 남음 · ${snap.grind_count}회차`}</p>
       ) : (

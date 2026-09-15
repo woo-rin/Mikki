@@ -192,9 +192,12 @@ def start_grind(sess: GameSession, now: float) -> dict:
     # 이전 노가다의 미지급 보수를 먼저 정산한다. 잠금이 자연히 풀린 뒤 정산 없이
     # 다시 시작하면 pending_payout 이 덮어써져 미지급액이 영구히 사라진다.
     settle_grind(sess, now)
+    # 파산이 전제가 아니다 — 평소에도 누를 수 있다.
+    #
+    # 보수가 3/5 씩 줄고 120초 동안 아무것도 못 하므로, 스스로 균형이 잡힌다.
+    # 부자일 때는 그동안 놓치는 램프가 보수보다 비싸고, 가난할 때만 남는 장사다.
+    # 전부 뽑아도 라운드당 약 50만원이라 목표(3배)에는 노가다만으로 못 닿는다.
     _check_unlocked(sess, now)
-    if not is_bankrupt(sess):
-        raise TradeError("not_bankrupt", "파산 상태에서만 노가다를 할 수 있습니다.")
     payout = grind_payout(sess.grind_count)
     sess.grind_until = now + config.GRIND_LOCK_SECONDS
     sess.pending_payout = payout

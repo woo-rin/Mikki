@@ -13,15 +13,29 @@ beforeEach(() => {
 })
 
 describe('노가다', () => {
-  it('파산이 아니면 나타나지 않는다', () => {
+  it('평소에도 누를 수 있다', () => {
     useGameStore.getState().applySnapshot(baseSnapshot({ bankrupt: false }), 1)
-    const { container } = render(<GrindPanel />)
-    expect(container).toBeEmptyDOMElement()
+    render(<GrindPanel />)
+    expect(screen.getByRole('button', { name: '노가다' })).toBeEnabled()
+    expect(screen.getByRole('heading', { name: '노가다' })).toBeInTheDocument()
   })
 
-  it('파산이어도 매매·분석을 막지 않는다는 것을 말한다', () => {
+  it('평소에는 파산 경고를 띄우지 않는다', () => {
+    useGameStore.getState().applySnapshot(baseSnapshot({ bankrupt: false }), 1)
+    render(<GrindPanel />)
+    expect(screen.queryByText(/10만원 아래/)).not.toBeInTheDocument()
+  })
+
+  it('잠금값이 얼마인지는 평소에도 말해준다 — 이게 노가다의 값이다', () => {
+    useGameStore.getState().applySnapshot(baseSnapshot({ bankrupt: false }), 1)
+    render(<GrindPanel />)
+    expect(screen.getByText(/120초간 매매와 분석이 잠깁니다/)).toBeInTheDocument()
+  })
+
+  it('파산이면 제목과 문구가 경고로 바뀐다', () => {
     useGameStore.getState().applySnapshot(baseSnapshot({ bankrupt: true, cash: 50_000 }), 1)
     render(<GrindPanel />)
+    expect(screen.getByRole('heading', { name: '파산' })).toBeInTheDocument()
     expect(screen.getByText(/매매와 분석은 계속 가능합니다/)).toBeInTheDocument()
   })
 

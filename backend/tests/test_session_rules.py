@@ -122,10 +122,20 @@ def test_second_grind_pays_less():
     assert sess.cash == 120_000
 
 
-def test_grind_requires_bankruptcy():
-    with pytest.raises(TradeError) as excinfo:
-        start_grind(fresh(), now=0.0)
-    assert excinfo.value.code == "not_bankrupt"
+def test_grind_works_without_bankruptcy():
+    """평소에도 열려 있다. 보수 감쇠와 120초 잠금이 스스로 균형을 잡는다 —
+    부자일 때는 놓치는 램프가 잠금값보다 비싸다."""
+    sess = fresh()
+    info = start_grind(sess, now=0.0)
+    assert info["payout"] == grind_payout(0)
+    assert sess.grind_count == 1
+
+
+def test_grind_extracts_at_most_half_the_seed_per_round():
+    """상시로 열어도 라운드 목표(3배)에는 노가다만으로 못 닿는다."""
+    total = sum(grind_payout(i) for i in range(40))
+    assert total < config.SEED_CASH
+    assert total < config.SEED_CASH * config.ROUND_TARGET_MULTIPLIER
 
 
 def test_grind_cannot_be_started_while_already_locked():
@@ -164,10 +174,9 @@ def test_expired_grind_settles_before_a_new_one_can_start():
     """잠금이 자연히 풀린 뒤 정산 없이 재시작하면 1회차 보수가 사라졌다."""
     sess = broke(0)
     start_grind(sess, now=0.0)
-    with pytest.raises(TradeError) as excinfo:
-        start_grind(sess, now=200.0)
-    assert excinfo.value.code == "not_bankrupt"
+    start_grind(sess, now=200.0)         # 잠금이 풀렸으니 바로 다음 회차로 간다
     assert sess.cash == 200_000          # 1회차 보수는 사라지지 않고 지급됐다
+    assert sess.grind_count == 2
 
 
 def test_no_payout_is_lost_when_grinding_again_while_still_bankrupt():

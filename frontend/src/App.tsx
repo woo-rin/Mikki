@@ -18,7 +18,7 @@ import { useGameStore } from './store/gameStore'
 import { useUiStore } from './store/uiStore'
 
 /** 좌측은 한 번에 하나만 본다. */
-function TabPane() {
+function TabPane({ bankrupt }: { bankrupt: boolean }) {
   const tab = useUiStore((s) => s.tab)
   if (tab === 'fundamentals') return <FundamentalsPanel />
   if (tab === 'positions') {
@@ -27,6 +27,8 @@ function TabPane() {
         <AccountPanel />
         <RoundPanel />
         <Positions />
+        {/* 평소에는 여기 조용히 있는다. 파산하면 우측으로 끌려 나간다. */}
+        {!bankrupt && <GrindPanel />}
       </>
     )
   }
@@ -45,7 +47,7 @@ export function Board() {
       <div className="cols">
         <aside className="left">
           <Tabs />
-          <TabPane />
+          <TabPane bankrupt={bankrupt} />
         </aside>
         <main className="right">
           <PriceChart />

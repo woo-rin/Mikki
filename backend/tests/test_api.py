@@ -183,11 +183,25 @@ def test_analyze_unknown_news_returns_404(client):
     assert response.status_code == 404
 
 
-def test_grind_requires_bankruptcy(client):
+def test_grind_is_open_without_bankruptcy(client):
+    """평소에도 누를 수 있다. 파산은 더 이상 전제가 아니다."""
     sid = start(client)["session_id"]
     response = client.post("/api/grind", json={"session_id": sid})
-    assert response.status_code == 400
-    assert response.json()["detail"]["code"] == "not_bankrupt"
+    assert response.status_code == 200
+    body = response.json()
+    assert body["payout"] > 0
+    assert body["grind_count"] == 1
+    assert body["lock_remaining"] > 0
+
+
+def test_grind_still_locks_out_trading(client):
+    """상시로 열렸어도 잠금은 그대로다 — 이게 노가다의 값이다."""
+    sid = start(client)["session_id"]
+    client.post("/api/grind", json={"session_id": sid})
+    response = client.post("/api/trade", json={"session_id": sid, "symbol": "geno",
+                                               "side": "buy", "qty": 1})
+    assert response.status_code == 423
+    assert response.json()["detail"]["code"] == "locked"
 
 
 def test_grind_locks_trading_and_state_reports_it(client):

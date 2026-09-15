@@ -43,6 +43,17 @@ describe('판 껍데기', () => {
     expect(screen.getByRole('heading', { name: /기업분석/ })).toBeInTheDocument()
   })
 
+  it('평소에는 노가다가 내 포지션 탭 안에 있다', async () => {
+    seat()
+    render(<Board />)
+    expect(screen.queryByRole('heading', { name: '노가다' })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('tab', { name: '내 포지션' }))
+    expect(screen.getByRole('heading', { name: '노가다' })).toBeInTheDocument()
+    // 평소에는 주문을 밀어내지 않는다
+    expect(screen.getByRole('heading', { name: /주문/ })).toBeInTheDocument()
+  })
+
   it('파산하면 탭과 무관하게 복귀 수단이 뜨고 주문은 사라진다', async () => {
     seat({ bankrupt: true, cash: 0, equity: 50_000 })
     render(<Board />)
