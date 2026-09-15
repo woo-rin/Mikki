@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { HttpResponse, http } from 'msw'
+import { capturedCompanyAnalysis } from '../mocks/fixtures'
 import { server } from '../mocks/server'
 import { ApiError } from './client'
-import { analyze, getState, grind, newGame, nextRound, trade } from './endpoints'
+import { analyze, companyAnalysis, getState, grind, newGame, nextRound, trade } from './endpoints'
 
 describe('엔드포인트', () => {
   it('새 게임은 시작 스냅샷을 준다 — 뉴스는 빈 배열이 정상이다', async () => {
@@ -48,6 +49,36 @@ describe('엔드포인트', () => {
   it('라운드 전환은 스냅샷을 준다', async () => {
     const snap = await nextRound('s')
     expect(snap.round_no).toBe(2)
+  })
+
+  it('기업분석은 적정가와 밸류에이션 등급을 준다', async () => {
+    const res = await companyAnalysis('s', 'geno')
+    expect(res.fair_value).toBe(39_216)
+    expect(res.current_price).toBe(47_909)
+    expect(res.gap_pct).toBe(22.2)
+    expect(res.valuation).toBe('overvalued')
+    expect(res.label).toBe('고평가')
+    expect(res.company_analyses_left).toBe(1)
+  })
+
+  it('기업분석은 분기 재무를 함께 준다', async () => {
+    const res = await companyAnalysis('s', 'geno')
+    expect(res.financials.quarter).toBe('2024Q1')
+    expect(res.financials.eps).toBe(1032)
+    expect(res.financials.per).toBe(46.4)
+    expect(res.financials.debt_ratio).toBe(40.0)
+  })
+
+  it('기업분석은 심볼을 본문에 보낸다', async () => {
+    let seen: unknown = null
+    server.use(
+      http.post('/api/company-analysis', async ({ request }) => {
+        seen = await request.json()
+        return HttpResponse.json(capturedCompanyAnalysis)
+      }),
+    )
+    await companyAnalysis('s', 'taesan')
+    expect(seen).toEqual({ session_id: 's', symbol: 'taesan' })
   })
 
   it('오류는 ApiError 로 던진다', async () => {

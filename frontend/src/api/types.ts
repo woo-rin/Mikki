@@ -8,6 +8,13 @@ export type Symbol_ = 'hanbit' | 'geno' | 'sungjin' | 'pixel' | 'taesan' | 'araw
 
 export type Strength = 'up_strong' | 'up_weak' | 'none' | 'down_weak' | 'down_strong'
 
+export type Valuation =
+  | 'severely_overvalued'
+  | 'overvalued'
+  | 'fair'
+  | 'undervalued'
+  | 'severely_undervalued'
+
 export interface Stock {
   symbol: Symbol_
   name: string
@@ -16,6 +23,8 @@ export interface Stock {
   /** 시작가 대비 등락률. 표시 전용 — 어떤 판정에도 쓰지 않는다. */
   change_pct: number
   held: number
+  /** 이 라운드에 이 종목의 적정가를 샀는지. 뉴스의 analyzed 와 이름이 다르다 — 별개 자원이다. */
+  fundamentals_analyzed: boolean
 }
 
 export interface NewsItem {
@@ -40,6 +49,8 @@ export interface Snapshot {
   target: number
   round_start_equity: number
   analyses_left: number
+  /** 남은 기업분석 횟수 (0~2). AI 분석과 별개 풀이다. */
+  company_analyses_left: number
   bankrupt: boolean
   locked: boolean
   lock_remaining: number
@@ -71,6 +82,34 @@ export interface AnalyzeResult {
   already_priced_in: boolean
   offline: boolean
   analyses_left: number
+}
+
+export interface Financials {
+  quarter: string
+  revenue: number
+  operating_income: number
+  net_income: number
+  eps: number
+  /** 적자 분기에는 null 이다. 그때 적정가는 PER 이 아니라 매출 기준(PSR)으로 냈다. */
+  per: number | null
+  debt_ratio: number
+}
+
+export interface CompanyAnalysisResult {
+  symbol: Symbol_
+  name: string
+  /** 그 라운드의 적정가. 스냅샷에는 없다 — 이 응답으로만 나온다. */
+  fair_value: number
+  current_price: number
+  /** (current_price - fair_value) / fair_value × 100. 양수가 고평가. */
+  gap_pct: number
+  valuation: Valuation
+  /** 한국어 등급 라벨. 프론트에서 다시 만들지 않는다. */
+  label: string
+  financials: Financials
+  commentary: string
+  offline: boolean
+  company_analyses_left: number
 }
 
 export interface GrindResult {
