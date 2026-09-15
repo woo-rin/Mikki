@@ -1,6 +1,7 @@
 import { won } from '../../lib/format'
 import { useDerivedStore } from '../../store/derivedStore'
 import { useGameStore } from '../../store/gameStore'
+import { priceSeries } from '../../store/merge'
 import { useUiStore } from '../../store/uiStore'
 
 const W = 720
@@ -16,11 +17,14 @@ function bandColor(strength: string): string {
 
 export function PriceChart() {
   const selected = useUiStore((s) => s.selected)
-  const stock = useGameStore((s) => s.snapshot?.stocks.find((x) => x.symbol === selected))
-  const series = useDerivedStore((s) => s.history[selected]) ?? []
+  const snap = useGameStore((s) => s.snapshot)
   const feed = useDerivedStore((s) => s.feed)
 
-  if (!stock) return null
+  const stock = snap?.stocks.find((x) => x.symbol === selected)
+  if (!snap || !stock) return null
+
+  // 서버가 들고 있는 60틱이다. 새로고침해도 남는다.
+  const series = priceSeries(stock, snap.tick)
 
   const first = series[0]
   const last = series[series.length - 1]
@@ -29,7 +33,7 @@ export function PriceChart() {
       <section className="panel">
         <h2>{`${stock.name} · ${won(stock.price)}`}</h2>
         <p className="empty">이력을 쌓는 중…</p>
-        <p className="hint">가격 이력은 폴링하며 메모리에 쌓입니다. 새로고침하면 사라집니다.</p>
+        <p className="hint">첫 tick 이 지나면 그려집니다.</p>
       </section>
     )
   }

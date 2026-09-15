@@ -7,12 +7,12 @@ import type {
  * 이 숫자를 "그 종목의 시작가" 로 읽으면 안 된다.
  */
 export const SYMBOLS: Stock[] = [
-  { symbol: 'hanbit', name: '한빛솔리드', sector: '반도체', price: 82_000, change_pct: 0, held: 0, fundamentals_analyzed: false },
-  { symbol: 'geno', name: '제노셀', sector: '바이오', price: 45_000, change_pct: 0, held: 0, fundamentals_analyzed: false },
-  { symbol: 'sungjin', name: '성진셀즈', sector: '2차전지', price: 61_000, change_pct: 0, held: 0, fundamentals_analyzed: false },
-  { symbol: 'pixel', name: '픽셀로그', sector: '게임', price: 33_000, change_pct: 0, held: 0, fundamentals_analyzed: false },
-  { symbol: 'taesan', name: '태산건영', sector: '건설', price: 18_500, change_pct: 0, held: 0, fundamentals_analyzed: false },
-  { symbol: 'arawings', name: '아라윙스', sector: '항공', price: 24_000, change_pct: 0, held: 0, fundamentals_analyzed: false },
+  { symbol: 'hanbit', name: '한빛솔리드', sector: '반도체', price: 82_000, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [] },
+  { symbol: 'geno', name: '제노셀', sector: '바이오', price: 45_000, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [] },
+  { symbol: 'sungjin', name: '성진셀즈', sector: '2차전지', price: 61_000, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [] },
+  { symbol: 'pixel', name: '픽셀로그', sector: '게임', price: 33_000, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [] },
+  { symbol: 'taesan', name: '태산건영', sector: '건설', price: 18_500, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [] },
+  { symbol: 'arawings', name: '아라윙스', sector: '항공', price: 24_000, change_pct: 0, held: 0, fundamentals_analyzed: false, history: [] },
 ]
 
 export function baseSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {

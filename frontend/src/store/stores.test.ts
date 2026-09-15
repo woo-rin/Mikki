@@ -60,13 +60,12 @@ describe('gameStore', () => {
 })
 
 describe('derivedStore', () => {
-  it('스냅샷에서 이력과 뉴스를 쌓는다', () => {
+  it('스냅샷에서 뉴스를 쌓는다 — 가격 이력은 서버가 들고 있다', () => {
     const d = useDerivedStore.getState()
     d.record(baseSnapshot({ tick: 1, news: [sampleNews()] }))
     d.record(baseSnapshot({ tick: 2 }))
-    const s = useDerivedStore.getState()
-    expect(s.history['hanbit']).toHaveLength(2)
-    expect(s.feed).toHaveLength(1)
+    expect(useDerivedStore.getState().feed).toHaveLength(1)
+    expect('history' in useDerivedStore.getState()).toBe(false)
   })
 
   it('체결로만 평단이 생긴다', () => {
@@ -114,11 +113,10 @@ describe('기업분석 보관', () => {
     expect(useDerivedStore.getState().valuations).toEqual({})
   })
 
-  it('가격 이력과 평단은 라운드가 바뀌어도 남는다', () => {
+  it('평단은 라운드가 바뀌어도 남는다', () => {
     useDerivedStore.getState().record(baseSnapshot({ round_no: 1, tick: 3 }))
     useDerivedStore.getState().recordFill(capturedTrade)
     useDerivedStore.getState().record(baseSnapshot({ round_no: 2, tick: 4 }))
-    expect(useDerivedStore.getState().history['hanbit']?.length).toBeGreaterThan(0)
     expect(useDerivedStore.getState().positions['geno']?.qty).toBe(2)
   })
 })

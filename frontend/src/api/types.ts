@@ -25,6 +25,8 @@ export interface Stock {
   held: number
   /** 이 라운드에 이 종목의 적정가를 샀는지. 뉴스의 analyzed 와 이름이 다르다 — 별개 자원이다. */
   fundamentals_analyzed: boolean
+  /** 최근 60틱의 가격. 오래된 것이 앞이고 마지막 값이 price 와 같다. 서버가 들고 있다. */
+  history: number[]
 }
 
 export interface NewsItem {

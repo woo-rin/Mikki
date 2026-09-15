@@ -1,14 +1,13 @@
 import { create } from 'zustand'
 import type { AnalyzeResult, CompanyAnalysisResult, Snapshot, TradeResult } from '../api/types'
 import { type Position, applyBuy, applySell, emptyPosition } from '../lib/money'
-import { type FeedItem, type PricePoint, appendHistory, attachAnalysis, upsertNews } from './merge'
+import { type FeedItem, attachAnalysis, upsertNews } from './merge'
 
 /**
  * 새로고침하면 사라지는 것들만 담는다.
- * 서버가 주지 않아 프론트가 직접 쌓아야 하는 값들이다 (api.md §6).
+ * 가격 이력은 여기 없다 — 서버가 stocks[].history 로 준다 (api.md §6).
  */
 interface DerivedState {
-  history: Record<string, PricePoint[]>
   feed: FeedItem[]
   positions: Record<string, Position>
   /** 산 종목의 적정가와 등급. 스냅샷에 없으므로 여기서만 산다. */
@@ -24,7 +23,6 @@ interface DerivedState {
 }
 
 export const useDerivedStore = create<DerivedState>((set) => ({
-  history: {},
   feed: [],
   positions: {},
   valuations: {},
@@ -36,7 +34,6 @@ export const useDerivedStore = create<DerivedState>((set) => ({
       // 지난 라운드에 산 값은 틀린 정보다. 서버도 fundamentals_analyzed 를 리셋한다.
       const rolled = s.roundNo !== null && s.roundNo !== snap.round_no
       return {
-        history: appendHistory(s.history, snap),
         feed: upsertNews(s.feed, snap),
         valuations: rolled ? {} : s.valuations,
         roundNo: snap.round_no,
@@ -58,5 +55,5 @@ export const useDerivedStore = create<DerivedState>((set) => ({
   recordValuation: (res) =>
     set((s) => ({ valuations: { ...s.valuations, [res.symbol]: res } })),
 
-  reset: () => set({ history: {}, feed: [], positions: {}, valuations: {}, roundNo: null }),
+  reset: () => set({ feed: [], positions: {}, valuations: {}, roundNo: null }),
 }))

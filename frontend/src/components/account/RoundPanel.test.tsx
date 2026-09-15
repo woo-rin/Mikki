@@ -42,7 +42,7 @@ describe('라운드 전환', () => {
     expect(useGameStore.getState().snapshot?.tick).toBe(99)
   })
 
-  it('라운드가 바뀌어도 가격 이력과 평단은 남는다', async () => {
+  it('라운드가 바뀌어도 평단은 남는다', async () => {
     const snap = baseSnapshot({ goal_reached: true, tick: 7 })
     useGameStore.getState().applySnapshot(snap, 1)
     useDerivedStore.getState().record(snap)
@@ -51,7 +51,6 @@ describe('라운드 전환', () => {
     await userEvent.click(screen.getByRole('button', { name: '다음 라운드' }))
     await waitFor(() => expect(useGameStore.getState().snapshot?.round_no).toBe(2))
 
-    expect(useDerivedStore.getState().history['hanbit']?.length).toBeGreaterThan(0)
     expect(useDerivedStore.getState().positions['geno']?.qty).toBe(2)
   })
 })
