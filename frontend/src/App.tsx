@@ -3,6 +3,7 @@ import { AccountPanel } from './components/account/AccountPanel'
 import { GrindPanel } from './components/account/GrindPanel'
 import { Positions } from './components/account/Positions'
 import { RoundPanel } from './components/account/RoundPanel'
+import { FundamentalsPanel } from './components/fundamentals/FundamentalsPanel'
 import { PriceChart } from './components/chart/PriceChart'
 import { NewsFeed } from './components/news/NewsFeed'
 import { OrderTicket } from './components/order/OrderTicket'
@@ -36,6 +37,7 @@ function Board() {
         <main className="right">
           <PriceChart />
           <Watchlist />
+          <FundamentalsPanel />
         </main>
       </div>
     </div>

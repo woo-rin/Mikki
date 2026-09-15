@@ -112,6 +112,6 @@ export const capturedLossQuarter: CompanyAnalysisResult = {
     per: null,
     debt_ratio: 52.8,
   },
-  commentary: '적자 분기라 매출 기준으로 봤다. 판정: 심각한 저평가. …',
+  commentary: '체력 대비 주가가 크게 눌려 있다. 판정: 심각한 저평가. …',
   company_analyses_left: 0,
 }

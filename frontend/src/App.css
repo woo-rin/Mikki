@@ -67,3 +67,9 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 .panel.warn { border-color: var(--up); }
 .panel.goal { border-color: var(--accent); }
 .panel.warn p, .panel.goal p { margin: 0 0 var(--gap-3); }
+
+.financials th { text-align: left; color: var(--ink-2); font-weight: 400; font-size: 13px; }
+.financials td { text-align: right; }
+.panel .verdict-head { margin-bottom: var(--gap-3); }
+.panel > button:not(.primary) { background: var(--surface-3); border: 1px solid var(--line-strong); color: var(--ink); padding: var(--gap-1) var(--gap-3); cursor: pointer; font: inherit; }
+.panel > button:disabled { opacity: .4; cursor: not-allowed; }
