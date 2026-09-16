@@ -2,7 +2,7 @@ import random
 
 import pytest
 
-from app import config
+from app import config, fallback
 from app.fallback import (
     STRENGTH_LABELS,
     strength_of,
@@ -13,7 +13,7 @@ from app.fallback import (
     _POSITIVE_BODIES,
     _POSITIVE_HEADLINES,
 )
-from app.models import NewsPlan
+from app.models import BoardPlan, NewsPlan
 from app.scenario import build_plans
 
 
@@ -128,3 +128,49 @@ def test_generated_text_comes_only_from_the_tone_matched_pools():
             item = write_news([plan], random.Random(7))[0]
             assert item.headline in allowed_headlines, (tone, kind)
             assert item.body in allowed_bodies, (tone, kind)
+
+
+# ------------------------------------------------------------ 종토방 글
+
+def _board_plan(bullish=True, author="김부장", post_id=0):
+    return BoardPlan(
+        post_id=post_id, news_id=0, ai_index=7, author=author,
+        symbol="geno", bullish=bullish, publish_tick=40,
+    )
+
+
+def test_board_fallback_writes_one_body_per_plan():
+    plans = [_board_plan(post_id=i) for i in range(5)]
+    posts = fallback.write_posts(plans, random.Random(0))
+    assert len(posts) == 5
+    assert all(p.body.strip() for p in posts)
+    assert all(p.offline for p in posts)
+
+
+def test_board_fallback_is_deterministic():
+    plans = [_board_plan(post_id=i) for i in range(4)]
+    first = [p.body for p in fallback.write_posts(plans, random.Random(3))]
+    second = [p.body for p in fallback.write_posts(plans, random.Random(3))]
+    assert first == second
+
+
+def test_board_fallback_tone_follows_the_view():
+    bull = fallback.write_posts([_board_plan(bullish=True)], random.Random(1))[0]
+    bear = fallback.write_posts([_board_plan(bullish=False)], random.Random(1))[0]
+    assert bull.body != bear.body
+
+
+def test_board_fallback_never_names_the_verdict():
+    """글은 의견이지 판정이 아니다. 등급 어휘가 새면 분석이 무의미해진다."""
+    banned = ("역방향", "과장", "정직", "함정", "impact", "통찰력")
+    plans = [_board_plan(bullish=b, post_id=i) for i, b in enumerate([True, False] * 8)]
+    for post in fallback.write_posts(plans, random.Random(2)):
+        for word in banned:
+            assert word not in post.body
+
+
+def test_board_fallback_does_not_claim_an_action():
+    """샀는지는 체결 피드가 보여준다. 글은 의견만 말한다."""
+    plans = [_board_plan(bullish=b, post_id=i) for i, b in enumerate([True, False] * 8)]
+    for post in fallback.write_posts(plans, random.Random(4)):
+        assert "매수했" not in post.body and "매도했" not in post.body

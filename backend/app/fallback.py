@@ -7,7 +7,7 @@ import random
 from collections.abc import Sequence
 
 from app import config
-from app.models import NewsItem, NewsPlan
+from app.models import BoardPlan, BoardPost, NewsItem, NewsPlan
 
 STRENGTH_LABELS: dict[str, str] = {
     "up_strong": "강한 상승",
@@ -116,3 +116,42 @@ def write_commentary(item: NewsItem) -> str:
     """확정된 등급을 사람 말로 옮긴다. 판정은 여기서 다시 하지 않는다."""
     strength = strength_of(item.plan.impact)
     return _COMMENTARY[strength].format(label=STRENGTH_LABELS[strength])
+
+
+_BULLISH_POSTS = (
+    "{name} 이거 슬슬 오는 것 같은데",
+    "{name} 지금 안 타면 나중에 후회한다",
+    "{name} 차트 보면 답 나옴",
+    "{name} 이 정도면 충분히 싸다고 봄",
+    "{name} 기사 보고 바로 왔다 ㅋㅋ",
+    "{name} 여기서 더 빠질 이유가 없는데",
+)
+_BEARISH_POSTS = (
+    "{name} 이거 좀 아닌 것 같은데",
+    "{name} 기사만 그럴듯하고 알맹이가 없음",
+    "{name} 지금 들어가는 건 좀 위험해 보임",
+    "{name} 이미 다 반영된 거 아님?",
+    "{name} 여기 물린 사람 많을 듯",
+    "{name} 나는 좀 더 보고 판단하려고",
+)
+
+
+def write_posts(
+    plans: Sequence[BoardPlan], rng: random.Random
+) -> list[BoardPost]:
+    """확정된 시각을 종토방 말투로 옮긴다.
+
+    등급 어휘("역방향", "함정" 같은)를 쓰지 않는다 — 글은 의견이지 판정이
+    아니다. 샀는지도 말하지 않는다. 행동은 체결 피드가 보여준다.
+    """
+    posts: list[BoardPost] = []
+    for plan in plans:
+        pool = _BULLISH_POSTS if plan.bullish else _BEARISH_POSTS
+        posts.append(
+            BoardPost(
+                plan=plan,
+                body=rng.choice(pool).format(name=config.STOCKS[plan.symbol].name),
+                offline=True,
+            )
+        )
+    return posts

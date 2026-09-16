@@ -71,6 +71,11 @@ AI_COUNT_DEFAULT = 5
 AI_COUNT_MIN = 1
 AI_COUNT_MAX = 9
 
+# 뉴스 하나에 달리는 글의 상한. 발언 확률은 bet_ratio 를 그대로 쓰므로
+# 아홉 명의 합이 3.6 이라 기대 발언자가 저절로 3~4명이 된다.
+# 0명도 정상이다 — 댓글이 안 달리는 기사가 가끔 있는 것이 자연스럽다.
+BOARD_MAX_SPEAKERS = 4
+
 # 섹터 기준 배수. 실제 시장 평균에서 따왔고, 밸런스 손잡이로 쓴다.
 # PER 은 흑자 분기에, PSR 은 적자 분기에 쓰인다.
 SECTOR_PER: dict[str, float] = {
