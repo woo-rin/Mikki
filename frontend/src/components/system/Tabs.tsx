@@ -3,6 +3,7 @@ import { useUiStore } from '../../store/uiStore'
 
 const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
   { id: 'news', label: '뉴스' },
+  { id: 'board', label: '종토방' },
   { id: 'fundamentals', label: '기업' },
   { id: 'participants', label: '참가자' },
   { id: 'positions', label: '내 포지션' },

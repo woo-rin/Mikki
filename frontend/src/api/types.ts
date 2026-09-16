@@ -45,6 +45,18 @@ export interface AiRow {
   rank: number
 }
 
+/** 종토방 글 한 편. bullish 는 오지 않는다 — 문장으로만 읽어야 한다. */
+export interface BoardPost {
+  post_id: number
+  news_id: number
+  author: string
+  symbol: Symbol_
+  name: string
+  body: string
+  age_seconds: number
+  offline: boolean
+}
+
 /** 최종 순위 한 줄. 종료 전에는 ranking 이 null 이다. */
 export interface RankRow {
   rank: number
@@ -99,6 +111,8 @@ export interface Snapshot {
   ai: AiRow[]
   /** trades_since 로 걸러진 체결. 증분이므로 클라이언트가 누적해야 한다. */
   trades: TradeRow[]
+  /** board_since 로 걸러진 글. 증분이므로 클라이언트가 누적해야 한다. */
+  board: BoardPost[]
   status: 'running' | 'finished'
   /** 경주 전체 길이(초) */
   race_seconds: number

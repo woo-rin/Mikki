@@ -1,6 +1,7 @@
 import './App.css'
 import { AccountPanel } from './components/account/AccountPanel'
 import { Leaderboard } from './components/ai/Leaderboard'
+import { BoardFeed } from './components/board/BoardFeed'
 import { TradeFeed } from './components/ai/TradeFeed'
 import { GrindOverlay } from './components/account/GrindOverlay'
 import { GrindPanel } from './components/account/GrindPanel'
@@ -23,6 +24,7 @@ import { useUiStore } from './store/uiStore'
 /** 좌측은 한 번에 하나만 본다. */
 function TabPane({ bankrupt }: { bankrupt: boolean }) {
   const tab = useUiStore((s) => s.tab)
+  if (tab === 'board') return <BoardFeed />
   if (tab === 'fundamentals') return <FundamentalsPanel />
   if (tab === 'participants') {
     return (

@@ -59,6 +59,7 @@ export function baseSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     news: [],
     ai: sampleAi(),
   trades: [],
+  board: [],
   news_total: 20,
     ...overrides,
   }

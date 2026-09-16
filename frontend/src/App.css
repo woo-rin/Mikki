@@ -247,3 +247,14 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 .race-rank { margin: var(--gap-2) 0; }
 .race-rank td { padding: var(--gap-2) var(--gap-3); }
 .race-rank tr[data-me='true'] { font-weight: 600; }
+
+/* ── 종토방 ────────────────────────────────────────────────── */
+/* 강세·약세를 색으로 구분하지 않는다. 문장을 읽게 두는 것이 요점이다. */
+.board { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px;
+  max-height: 420px; overflow-y: auto; }
+.post { border-top: 1px solid var(--line); padding: var(--gap-3) 0; }
+.post-head { display: flex; gap: var(--gap-2); align-items: baseline; font-size: 11px; }
+.post-author { color: var(--ink); font-size: 12px; }
+.post-sym { color: var(--ink-2); }
+.post-age { color: var(--ink-3); margin-left: auto; }
+.post-body { margin: var(--gap-2) 0 0; color: var(--ink-2); }

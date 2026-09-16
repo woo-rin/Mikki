@@ -15,11 +15,13 @@ export function getState(
   sessionId: string,
   since: number,
   tradesSince = -1,
+  boardSince = -1,
 ): Promise<Snapshot> {
   const q = new URLSearchParams({
     session_id: sessionId,
     since: String(since),
     trades_since: String(tradesSince),
+    board_since: String(boardSince),
   })
   return getJson<Snapshot>(`/api/state?${q}`)
 }

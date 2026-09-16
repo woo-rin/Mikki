@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   baseSnapshot, capturedAnalyze, capturedCompanyAnalysis, capturedTrade, sampleNews,
 } from '../mocks/fixtures'
-import type { Symbol_, TradeRow } from '../api/types'
+import type { BoardPost, Symbol_, TradeRow } from '../api/types'
 import {
-  appendTrades, maxTradeSeq, tradesForNews,
+  appendPosts, appendTrades, maxPostId, maxTradeSeq, tradesForNews,
   applyCompanyAnalysisToSnapshot, applyGrindToSnapshot, applyTradeToSnapshot,
   attachAnalysis, isFresher, maxNewsId, positionRows, priceSeries, upsertNews,
 } from './merge'
@@ -246,5 +246,33 @@ describe('기사에 반응한 체결', () => {
       trade(2, { actor: '김부장', tick: 110 }),
     ]
     expect(tradesForNews(rows, 'geno', 100).map((t) => t.actor)).toEqual(['김부장'])
+  })
+})
+
+function post(postId: number, patch: Partial<BoardPost> = {}): BoardPost {
+  return {
+    post_id: postId, news_id: 1, author: '김부장', symbol: 'geno',
+    name: '제노셀', body: '이거 간다', age_seconds: 10, offline: false, ...patch,
+  }
+}
+
+describe('종토방 누적', () => {
+  it('아직 하나도 없으면 커서는 -1 이다', () => {
+    expect(maxPostId([])).toBe(-1)
+  })
+
+  it('최신 글이 앞에 온다', () => {
+    expect(appendPosts([], [post(1), post(2), post(3)]).map((p) => p.post_id))
+      .toEqual([3, 2, 1])
+  })
+
+  it('같은 post_id 가 두 번 와도 한 번만 남는다', () => {
+    const once = appendPosts([], [post(1), post(2)])
+    expect(appendPosts(once, [post(2), post(3)]).map((p) => p.post_id))
+      .toEqual([3, 2, 1])
+  })
+
+  it('커서는 받은 것 중 최대 post_id 다', () => {
+    expect(maxPostId(appendPosts([], [post(4), post(9), post(7)]))).toBe(9)
   })
 })

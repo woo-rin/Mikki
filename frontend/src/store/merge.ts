@@ -1,6 +1,6 @@
 import type {
   AnalyzeResult, CompanyAnalysisResult, GrindResult, NewsItem, Snapshot, Stock, Strength,
-  Symbol_, TradeResult, TradeRow,
+  BoardPost, Symbol_, TradeResult, TradeRow,
 } from '../api/types'
 import { publishTick as toPublishTick, rampEndTick } from '../lib/derive'
 import { unrealized } from '../lib/money'
@@ -103,6 +103,23 @@ export function attachAnalysis(
  * 서버도 최근 500건까지만 들고 있다. 더 쌓아도 볼 수 없는 것을 들고 있을 뿐이다.
  */
 const TRADES_MAX = 500
+
+/** 서버도 등장한 글만 준다. 더 쌓아도 볼 수 없는 것을 들고 있을 뿐이다. */
+const POSTS_MAX = 500
+
+/** post_id 기준 증분 누적. 최신이 앞에 온다. */
+export function appendPosts(prev: BoardPost[], incoming: BoardPost[]): BoardPost[] {
+  if (incoming.length === 0) return prev
+
+  const byId = new Map(prev.map((p) => [p.post_id, p]))
+  for (const p of incoming) byId.set(p.post_id, p)
+  return [...byId.values()].sort((a, b) => b.post_id - a.post_id).slice(0, POSTS_MAX)
+}
+
+/** board_since 커서. 아직 하나도 받지 않았으면 -1. */
+export function maxPostId(posts: BoardPost[]): number {
+  return posts.reduce((max, p) => (p.post_id > max ? p.post_id : max), -1)
+}
 
 /** 기사와 체결을 이어보는 창. 램프 길이가 비공개라 넉넉히 잡고 인과를 주장하지 않는다. */
 const NEWS_TRADE_WINDOW_TICKS = 60
