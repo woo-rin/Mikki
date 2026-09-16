@@ -34,7 +34,7 @@ python3 -m venv .venv
 
 ```bash
 cd backend
-.venv/bin/pytest -q            # 325 passed
+.venv/bin/pytest -q            # 359 passed
 ```
 
 전부 API 키 없이 통과한다. 테스트는 Claude 를 한 번도 부르지 않는다.
@@ -53,10 +53,10 @@ curl -s "localhost:7999/api/state?session_id=$SID" | python3 -m json.tool
 
 ```
 backend/          FastAPI 서버 — 이 안에서 자족한다
-  app/            12개 모듈 (아래)
+  app/            13개 모듈 (아래)
   data/           재무 스냅샷 — 커밋된다
   scripts/        DART 갱신 스크립트 — 서버는 임포트하지 않는다
-  tests/          10개 파일, 325개 테스트
+  tests/          11개 파일, 359개 테스트
   run.sh          포트 7999 로 고정 실행
 design/           UI 목업 아트보드 (.dc.html)
 docs/
@@ -71,9 +71,10 @@ docs/
 | `engine` | 가격 시뮬레이션 — 랜덤워크 + 뉴스 램프 + 적정가 앵커 + 주문 흐름 |
 | `session` | 거래·수수료·파산·노가다·라운드·체결 피드 |
 | `participants` | AI 참가자 9명 — 결정론적 매매 정책 |
+| `board` | 종토방 — AI 가 기사에 한마디 단다 |
 | `fundamentals` | 재무 스냅샷 → 적정가와 밸류에이션 등급 |
 | `fallback` | Claude 없이 뉴스와 해설 생성 |
-| `news` / `analysis` / `company_analysis` | Claude 를 아는 세 파일 |
+| `news` / `analysis` / `company_analysis` / `board` | Claude 를 아는 네 파일 |
 | `main` | HTTP, 세션 저장소, 동시성 |
 
 ## 설계에서 중요한 것
@@ -105,16 +106,17 @@ docs/
 
 ## 현재 상태
 
-- **백엔드** — 325개 테스트. **v2 가 전부 들어갔다** — AI 참가자와의 경주, 현금 기준
+- **백엔드** — 359개 테스트. **v2 가 전부 들어갔다** — AI 참가자와의 경주, 현금 기준
   목표, 게임 종료와 최종 순위까지.
 - **재무 데이터** — `backend/data/fundamentals.json` 은 아직 **임시 스냅샷**이다.
   적정가가 기존 시작가와 0.1% 이내로 맞도록 맞춰 둔 기준선이다. 실제 DART 데이터로
   바꾸려면 `DART_API_KEY` 를 발급받고 `scripts/fetch_fundamentals.py` 의 `MAPPING` 에
   실존 `corp_code` 를 채운 뒤 돌린다.
 - **프론트엔드** — 미착수. 목업 3안이 `design/` 에 있고 방향은 미선택.
-- **프론트** — 192개 테스트. 경주 계약까지 따라왔다 — 마감 시계, 현금 기준 진행바,
-  최종 순위 화면.
-- **다음** — 종토방(AI 가 쓴다).
+- **프론트** — 201개 테스트. 경주 계약과 종토방까지 따라왔다.
+- **남은 것** — `backend/data/fundamentals.json` 이 아직 임시 스냅샷이다.
+  `DART_API_KEY` 를 발급받아 `scripts/fetch_fundamentals.py` 를 돌리면 실제
+  기업 재무로 바뀐다.
 
 ## 문서
 
