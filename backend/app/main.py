@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from app import (
     analysis,
+    board,
     company_analysis,
     config,
     engine,
@@ -205,8 +206,35 @@ def _trade_rows(sess: GameSession, trades_since: int) -> list[dict]:
     return [row for row in sess.trades if row["seq"] > trades_since]
 
 
+def _board_rows(sess: GameSession, tick: int, since: int) -> list[dict]:
+    """등장한 글만, since 보다 큰 것만.
+
+    bullish 와 ai_index 는 절대 싣지 않는다 — 파싱 한 번에 아홉 명의 판단이
+    공짜가 되면 여론을 읽을 이유가 사라진다.
+    """
+    rows = []
+    for post in sess.posts:
+        if post.plan.publish_tick > tick or post.plan.post_id <= since:
+            continue
+        rows.append({
+            "post_id": post.plan.post_id,
+            "news_id": post.plan.news_id,
+            "author": post.plan.author,
+            "symbol": post.plan.symbol,
+            "name": config.STOCKS[post.plan.symbol].name,
+            "body": post.body,
+            "age_seconds": tick - post.plan.publish_tick,
+            "offline": post.offline,
+        })
+    return rows
+
+
 def _snapshot(
-    sess: GameSession, now: float, since: int = -1, trades_since: int = -1
+    sess: GameSession,
+    now: float,
+    since: int = -1,
+    trades_since: int = -1,
+    board_since: int = -1,
 ) -> dict:
     tick = _sync(sess, now)
     return {
@@ -231,6 +259,7 @@ def _snapshot(
         "winner": sess.winner,
         "stocks": _stock_rows(sess, tick),
         "news": _news_rows(sess, tick, since),
+        "board": _board_rows(sess, tick, board_since),
         "news_total": len(sess.news),
     }
 
@@ -268,8 +297,20 @@ async def _refill(sess: GameSession, count: int) -> None:
         # 경계를 넘는 경합이 생긴다. 워커에는 여기서 파생한 독립 인스턴스를 준다.
         worker_rng = random.Random(sess.rng.random())
         items = await asyncio.to_thread(news.fetch_news, plans, worker_rng, _client())
+
+        # 글은 이 배치에 딸린다. 판단이 뉴스 생성 시점에 이미 정해져 있으므로
+        # 따라잡기 요청에서 Claude 를 다시 부를 일이 없다.
+        board_plans = board.build_board_plans(
+            plans, sess.ais, sess.ai_seed, len(sess.posts)
+        )
+        posts = await asyncio.to_thread(
+            board.fetch_posts, board_plans, items,
+            random.Random(sess.rng.random()), _client(),
+        )
+
         sess.plans.extend(plans)
         sess.news.extend(items)
+        sess.posts.extend(posts)
     finally:
         _refilling.discard(sess.session_id)
 
@@ -329,6 +370,13 @@ async def new_game(
     sess.news.extend(
         await asyncio.to_thread(news.fetch_news, first, worker_rng, _client())
     )
+    first_board = board.build_board_plans(first, sess.ais, sess.ai_seed, 0)
+    sess.posts.extend(
+        await asyncio.to_thread(
+            board.fetch_posts, first_board, sess.news,
+            random.Random(rng.random()), _client(),
+        )
+    )
     sessions[session_id] = sess
     background.add_task(
         _refill, sess, config.NEWS_BATCH_SIZE - config.NEWS_FIRST_WAIT_COUNT
@@ -342,10 +390,13 @@ async def get_state(
     background: BackgroundTasks,
     since: int = -1,
     trades_since: int = -1,
+    board_since: int = -1,
 ) -> dict:
     sess = _get(session_id)
     async with _lock(session_id):
-        snapshot = _snapshot(sess, time.monotonic(), since, trades_since)
+        snapshot = _snapshot(
+            sess, time.monotonic(), since, trades_since, board_since
+        )
     # 등장 대기분이 마르기 전에 다음 배치를 채운다. 게임 플로우는 막지 않는다.
     if _pending_count(sess, snapshot["tick"]) <= config.NEWS_REFILL_THRESHOLD:
         background.add_task(_refill, sess, config.NEWS_BATCH_SIZE)

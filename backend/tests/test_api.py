@@ -790,3 +790,82 @@ def test_the_deadline_winner_has_the_most_cash(client):
 def test_time_never_runs_past_the_deadline(client):
     sid = start(client, config.RACE_SECONDS * 3)["session_id"]
     assert state(client, sid)["tick"] <= config.RACE_SECONDS
+
+
+# ------------------------------------------------------------ 종토방
+
+def test_board_is_empty_at_the_start(client):
+    """기사가 없으면 반응도 없다."""
+    assert start(client)["board"] == []
+
+
+def test_board_fills_as_articles_land(client):
+    sid = start(client, ELAPSED)["session_id"]
+    posts = state(client, sid)["board"]
+    assert posts, "기사가 여럿 떴는데 아무도 말하지 않았다"
+    for post in posts:
+        assert post["body"].strip()
+        assert post["author"]
+        assert post["name"] in {s.name for s in config.STOCKS.values()}
+
+
+def test_board_never_leaks_the_view(client):
+    """bullish 가 새면 파싱 한 번에 아홉 명의 판단이 공짜가 된다."""
+    raw = json.dumps(start(client, ELAPSED), ensure_ascii=False)
+    assert "bullish" not in raw
+    assert "ai_index" not in raw
+
+
+def test_board_hides_posts_that_have_not_appeared(client):
+    sid = start(client, ELAPSED)["session_id"]
+    for post in state(client, sid)["board"]:
+        assert post["age_seconds"] >= 0
+
+
+def test_board_since_filters_like_since(client):
+    sid = start(client, ELAPSED)["session_id"]
+    posts = state(client, sid)["board"]
+    assert posts
+    highest = max(p["post_id"] for p in posts)
+    response = client.get(f"/api/state?session_id={sid}&board_since={highest}")
+    assert all(p["post_id"] > highest for p in response.json()["board"])
+
+
+def test_a_post_points_at_its_article(client):
+    sid = start(client, ELAPSED)["session_id"]
+    body = state(client, sid)
+    news_ids = {n["news_id"] for n in body["news"]}
+    for post in body["board"]:
+        assert post["news_id"] in news_ids
+
+
+def test_catching_up_does_not_generate_more_posts(client, monkeypatch):
+    """**§3 의 구조적 주장이다.** 글은 뉴스 배치에 딸려 만들어지므로, 탭을
+    비웠다 돌아온 요청이 tick 수만큼 Claude 를 부르면 안 된다.
+    """
+    import app.main as main
+
+    real = main.board.fetch_posts
+    calls = {"n": 0}
+
+    def counted(*args, **kwargs):
+        calls["n"] += 1
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(main.board, "fetch_posts", counted)
+
+    sid = start(client)["session_id"]
+    after_start = calls["n"]
+
+    sessions[sid].started_at -= 600
+    state(client, sid)
+
+    assert calls["n"] - after_start <= 3, f"따라잡기에 {calls['n'] - after_start}회 불렸다"
+
+
+def test_posts_are_capped_per_article(client):
+    sid = start(client, ELAPSED)["session_id"]
+    per_news: dict[int, int] = {}
+    for post in state(client, sid)["board"]:
+        per_news[post["news_id"]] = per_news.get(post["news_id"], 0) + 1
+    assert max(per_news.values()) <= config.BOARD_MAX_SPEAKERS

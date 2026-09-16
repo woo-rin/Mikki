@@ -97,3 +97,123 @@ def test_a_fooled_crowd_and_a_clear_eyed_one_can_disagree():
         trap = plan(impact=-0.10, tone="positive", news_id=news_id)
         views.update(p.bullish for p in board.build_board_plans([trap], ais(), 5, 0))
     assert views == {True, False}
+
+
+def _post_plan(bullish=True, post_id=0, news_id=0, author="김부장"):
+    return BoardPlan(
+        post_id=post_id, news_id=news_id, ai_index=7, author=author,
+        symbol="geno", bullish=bullish, publish_tick=40,
+    )
+
+
+def _news_item(news_id=0):
+    return NewsItem(plan=plan(news_id=news_id), headline="제노셀 임상 3상 중단",
+                    body="본문", offline=False)
+
+
+# ------------------------------------------------------------ 프롬프트
+
+def test_prompt_never_carries_insight():
+    """**이 작업의 핵심이다.** 통찰력이 새면 문체로 고수를 알아채고
+    AI 분석 5회가 무의미해진다."""
+    prompt = board.build_board_prompt([_post_plan()], [_news_item()])
+    for word in ("insight", "통찰력", "0.9", "0.22", "고수", "호구"):
+        assert word not in prompt
+
+
+def test_prompt_carries_the_article_and_the_author():
+    prompt = board.build_board_prompt([_post_plan(author="김부장")], [_news_item()])
+    assert "김부장" in prompt
+    assert "제노셀 임상 3상 중단" in prompt
+
+
+def test_prompt_states_the_tone_without_the_verdict():
+    bull = board.build_board_prompt([_post_plan(bullish=True)], [_news_item()])
+    bear = board.build_board_prompt([_post_plan(bullish=False)], [_news_item()])
+    assert bull != bear
+    for text in (bull, bear):
+        assert "역방향" not in text and "과장" not in text
+
+
+def test_system_forbids_naming_a_verdict():
+    assert "판정" in board.SYSTEM or "등급" in board.SYSTEM
+
+
+# ------------------------------------------------------------ 실패 경로
+
+def test_fetch_falls_back_without_a_client():
+    posts = board.fetch_posts([_post_plan()], [_news_item()], random.Random(0), None)
+    assert len(posts) == 1 and posts[0].offline is True
+
+
+def test_fetch_returns_nothing_for_no_plans():
+    assert board.fetch_posts([], [], random.Random(0), None) == []
+
+
+class _Boom:
+    class messages:
+        @staticmethod
+        def parse(**kwargs):
+            raise RuntimeError("네트워크가 죽었다")
+
+
+def test_fetch_falls_back_when_the_call_raises():
+    posts = board.fetch_posts([_post_plan()], [_news_item()], random.Random(0), _Boom())
+    assert posts[0].offline is True
+
+
+class _Refusal:
+    class messages:
+        @staticmethod
+        def parse(**kwargs):
+            return type("R", (), {"stop_reason": "refusal", "parsed_output": None})()
+
+
+def test_fetch_falls_back_on_refusal():
+    posts = board.fetch_posts([_post_plan()], [_news_item()], random.Random(0), _Refusal())
+    assert posts[0].offline is True
+
+
+class _Miscount:
+    class messages:
+        @staticmethod
+        def parse(**kwargs):
+            parsed = board.PostBatch(items=[board.PostText(body="하나뿐")])
+            return type("R", (), {"stop_reason": "end_turn", "parsed_output": parsed})()
+
+
+def test_fetch_falls_back_when_the_count_is_wrong():
+    posts = board.fetch_posts(
+        [_post_plan(post_id=0), _post_plan(post_id=1)],
+        [_news_item()], random.Random(0), _Miscount(),
+    )
+    assert len(posts) == 2
+    assert all(p.offline for p in posts)
+
+
+class _Blank:
+    class messages:
+        @staticmethod
+        def parse(**kwargs):
+            parsed = board.PostBatch(items=[board.PostText(body="   ")])
+            return type("R", (), {"stop_reason": "end_turn", "parsed_output": parsed})()
+
+
+def test_fetch_falls_back_on_a_blank_body():
+    posts = board.fetch_posts([_post_plan()], [_news_item()], random.Random(0), _Blank())
+    assert posts[0].offline is True
+
+
+class _Good:
+    class messages:
+        @staticmethod
+        def parse(**kwargs):
+            parsed = board.PostBatch(items=[board.PostText(body="이거 진짜 간다")])
+            return type("R", (), {"stop_reason": "end_turn", "parsed_output": parsed})()
+
+
+def test_fetch_returns_the_model_text_when_it_works():
+    posts = board.fetch_posts([_post_plan()], [_news_item()], random.Random(0), _Good())
+    assert posts[0].body == "이거 진짜 간다"
+    assert posts[0].offline is False
+    assert posts[0].plan.post_id == 0

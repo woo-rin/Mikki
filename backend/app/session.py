@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 
 from app import config, engine, fundamentals, participants
 from app.engine import PriceState
-from app.models import NewsItem, NewsPlan
+from app.models import BoardPost, NewsItem, NewsPlan
 
 
 class TradeError(Exception):
@@ -54,6 +54,7 @@ class GameSession:
     volume_total: dict[str, int] = field(default_factory=dict)
     plans: list[NewsPlan] = field(default_factory=list)
     news: list[NewsItem] = field(default_factory=list)
+    posts: list[BoardPost] = field(default_factory=list)
 
 
 def new_session(

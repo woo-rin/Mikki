@@ -11,8 +11,10 @@ import logging
 import random
 from collections.abc import Sequence
 
-from app import config, participants
-from app.models import BoardPlan, NewsPlan
+from pydantic import BaseModel
+
+from app import config, fallback, participants
+from app.models import BoardPlan, BoardPost, NewsItem, NewsPlan
 
 log = logging.getLogger(__name__)
 
@@ -64,3 +66,100 @@ def build_board_plans(
             spoken += 1
 
     return posts
+
+
+SYSTEM = """당신은 한국 주식 커뮤니티(종목토론방)의 여러 사용자입니다.
+각 사용자가 주어진 기사에 짧게 한마디 다는 글을 씁니다.
+
+규칙:
+- 한 줄, 길어야 두 줄. 커뮤니티 말투로 씁니다. 반말과 줄임말을 써도 됩니다.
+- **판정이나 등급을 말하지 않습니다.** "함정", "역방향", "과장" 같은 단어를 쓰지 않습니다.
+  본 대로 느낀 대로 쓰는 것이지 분석 결과를 발표하는 것이 아닙니다.
+- **샀는지 팔았는지 말하지 않습니다.** 의견만 씁니다.
+- 수치나 확률을 새로 만들어내지 않습니다. 투자 권유 표현도 쓰지 않습니다.
+- 회사는 모두 가상 기업입니다. 실재하는 기업·인물·기관의 이름을 쓰지 않습니다.
+- 사용자마다 말투가 조금씩 다르되, 누가 더 잘 아는 사람인지는 드러나지 않게 씁니다."""
+
+
+class PostText(BaseModel):
+    body: str
+
+
+class PostBatch(BaseModel):
+    items: list[PostText]
+
+
+def build_board_prompt(
+    plans: Sequence[BoardPlan], news_items: Sequence[NewsItem]
+) -> str:
+    """작성자·종목·헤드라인·시각만 넣는다.
+
+    **통찰력은 절대 넣지 않는다.** 알면 무의식적으로 문체에 흘려 플레이어가
+    읽기만으로 누가 고수인지 알아채고, 그러면 AI 분석 5회가 무의미해진다.
+    news.py 가 impact 를 안 주는 것과 같은 이유다.
+    """
+    headlines = {item.plan.news_id: item.headline for item in news_items}
+    lines = [f"글 {len(plans)}개를 써 주세요.", ""]
+    for index, plan in enumerate(plans, start=1):
+        stock = config.STOCKS[plan.symbol]
+        mood = "긍정적으로 본다" if plan.bullish else "회의적으로 본다"
+        lines.append(
+            f"{index}. 작성자={plan.author} / 종목={stock.name} / "
+            f"기사=\"{headlines.get(plan.news_id, '')}\" / 시각={mood}"
+        )
+    return "\n".join(lines)
+
+
+def _unusable(response, plans: Sequence[BoardPlan]) -> str | None:
+    """응답을 쓸 수 없는 이유. 쓸 수 있으면 None.
+
+    거절·개수 불일치·빈 문장은 버그가 아니라 예상 가능한 조건이므로 예외로
+    다루지 않는다.
+    """
+    if getattr(response, "stop_reason", None) == "refusal":
+        return "모델이 요청을 거절했습니다"
+    batch = getattr(response, "parsed_output", None)
+    if batch is None:
+        return "빈 응답"
+    if len(batch.items) != len(plans):
+        return "글 개수가 요청과 다릅니다(%d != %d)" % (len(batch.items), len(plans))
+    if any(not t.body.strip() for t in batch.items):
+        return "빈 본문"
+    return None
+
+
+def fetch_posts(
+    plans: Sequence[BoardPlan],
+    news_items: Sequence[NewsItem],
+    rng: random.Random,
+    client,
+) -> list[BoardPost]:
+    """Claude 로 문장을 채우고, 어떤 실패든 로컬 템플릿으로 떨어진다."""
+    if client is None or not plans:
+        return fallback.write_posts(plans, rng)
+
+    try:
+        response = client.messages.parse(
+            model=config.MODEL,
+            max_tokens=8000,
+            system=SYSTEM,
+            messages=[
+                {"role": "user", "content": build_board_prompt(plans, news_items)}
+            ],
+            thinking={"type": "adaptive"},
+            output_config={"effort": config.NEWS_EFFORT},
+            output_format=PostBatch,
+        )
+    except Exception:
+        log.warning("종토방 생성 호출 실패 — 로컬 템플릿으로 대체합니다.", exc_info=True)
+        return fallback.write_posts(plans, rng)
+
+    reason = _unusable(response, plans)
+    if reason:
+        log.warning("종토방 응답을 쓸 수 없습니다(%s) — 로컬 템플릿으로 대체합니다.", reason)
+        return fallback.write_posts(plans, rng)
+
+    return [
+        BoardPost(plan=plan, body=text.body, offline=False)
+        for plan, text in zip(plans, response.parsed_output.items)
+    ]
